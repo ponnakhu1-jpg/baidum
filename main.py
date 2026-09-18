@@ -32,7 +32,7 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     send lottery guidance(send_lottery_guidance)
-    )
+    
 def send_lottery_guidance():
     root_numbers=random.sample(range(0,10),2)
     spot_numbers=random.sample(range(0,100),10)
