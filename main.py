@@ -35,7 +35,8 @@ def handle_message(event):
         event.reply_token,
         TextSendMessage(text=f"คุณส่งข้อความว่า: {event.message.text}")
     )
-
+def send lottery guidance():
+    line_bot_api.push_message('Ccd80f46ea82114a21319bc2fa4b3b264')"
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
