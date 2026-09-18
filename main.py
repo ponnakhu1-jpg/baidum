@@ -41,7 +41,7 @@ def send_lottery_guidance():
     spot_numbers=random.sample(range(0,100),10)
     sets=[random.sample(range(0,1000),6)for _ in range(6)]
     message_text=f"เลขรูด:{root_numbers}nเลขเจาะ:{spot_number}nชุดหวย:{sets}"
-    random/_number=random.randint(10,99)
+    random_number=random.randint(10,99)
     line_bot_api.push_message('Ccd80f46ea82114a21319bc2fa4b3b264'TextSendMessage(text=message_text)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
