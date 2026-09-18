@@ -18,8 +18,8 @@ load_dotenv()
 
 app = Flask(__name__)
 
-channel_secret = os.getenv('LINE_CHANNEL_SECRET')
-channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+channel_secret = os.getenv('edc04916b82d3f178f4ce7809876f214')
+channel_access_token = os.getenv('0PnXQOQjvPvhuqMyF42RTEcfGdDr1xKFKzIFJh1oCXgmJngQcRPAOd85pWwQg0G3/jc1g+UYEuIccUao7WlVQQMwob+/ScM4MtqN6K1T+8Gyk6igcFbU2k0ZRvOh+8Aediu90MrLXX0QWy4xC+anIQdB04t89/1O/w1cDnyilFU=')
 
 configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
