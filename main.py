@@ -17,7 +17,7 @@ TARGET_GROUP_ID = "C57ce5ea1a45cb1c2ea9db9868ebd54f8"
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# กำหนดเขตเวลาไทยให้ชัดเจน
+# กำหนดเขตเวลาไทย
 bkk_tz = pytz.timezone("Asia/Bangkok")
 
 
@@ -61,6 +61,8 @@ def add_lottery_schedule(name, hour, minute):
         minute=minute,
         args=[name],
         timezone=bkk_tz,
+        id=name,
+        replace_existing=True,
     )
 
 
@@ -101,13 +103,25 @@ add_lottery_schedule("ฮานอยExtar", 21, 30)
 add_lottery_schedule("ลาวกาชาด", 22, 10)
 add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
 
-scheduler.start()
+# ป้องกันไม่ให้ Scheduler เริ่มรันซ้ำซ้อนใน Gunicorn
+if not scheduler.running:
+    scheduler.start()
 
 
 # --- Webhook Routes ---
 @app.route("/", methods=["GET"])
 def home():
     return "Line Bot Scheduler is running!", 200
+
+
+# 🟢 สั่งยิงข้อความทดสอบเข้ากลุ่มทันทีผ่านลิงก์เว็บ
+@app.route("/test-push", methods=["GET"])
+def test_push():
+    try:
+        send_lottery_guidance("ทดสอบระบบส่งอัตโนมัติ")
+        return "ส่งข้อความทดสอบเรียบร้อยแล้ว!", 200
+    except Exception as e:
+        return f"เกิดข้อผิดพลาด: {e}", 500
 
 
 @app.route("/callback", methods=["POST"])
