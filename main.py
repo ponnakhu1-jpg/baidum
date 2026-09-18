@@ -47,7 +47,7 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
         print(f"เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
-# --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (แก้ไขป้องกันการรันซ้ำ) ---
+# --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ ---
 scheduler = BackgroundScheduler(timezone=bkk_tz)
 
 
@@ -100,21 +100,12 @@ add_lottery_schedule("ลาวสตาร์VIP", 21, 10)
 add_lottery_schedule("ฮานอยExtar", 21, 30)
 add_lottery_schedule("ลาวกาชาด", 22, 10)
 add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
-add_lottery_schedule("ประชาชนลาว", 1, 55)
+add_lottery_schedule("ประชาชนลาว", 2, 0)
 
-# 🟢 ล็อกการรัน Scheduler ด้วยระบบไฟล์ล็อก ป้องกันการส่งเบิ้ล 2 รอบ
-def start_scheduler_once():
-    if not os.path.exists("scheduler.lock"):
-        try:
-            with open("scheduler.lock", "w") as f:
-                f.write("locked")
-            if not scheduler.running:
-                scheduler.start()
-                print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว (Master Process)")
-        except Exception as e:
-            print(f"Lock error: {e}")
-
-start_scheduler_once()
+# 🟢 เริ่มทำงาน Scheduler ทันที
+if not scheduler.running:
+    scheduler.start()
+    print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว!")
 
 
 # --- Webhook Routes ---
