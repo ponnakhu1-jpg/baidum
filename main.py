@@ -89,7 +89,7 @@ add_lottery_schedule("ลาวสามัคคีVIP", 20, 30)
 add_lottery_schedule("3รัฐ+VIP", 21, 10)
 add_lottery_schedule("ลาวสตาร์VIP", 21, 10)
 add_lottery_schedule("ฮานอยExtar", 21, 30)
-add_lottery_schedule("ลาวกาชาด", 22, 0)
+add_lottery_schedule("ลาวกาชาด", 22, 08)
 add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
 
 scheduler.start()
