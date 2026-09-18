@@ -10,8 +10,8 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 app = Flask(__name__)
 
 # --- คีย์และ ID สำหรับเชื่อมต่อ LINE API ---
-LINE_CHANNEL_ACCESS_TOKEN = "0PnXQOQjvPvhuqMyF42RTEcfGdDr1xKFKzIFJh1oCXgmJngQcRPAOd85pWwQg0G3/jc1g+UYEuIccUao7WlVQQMwob+/ScM4MtqN6K1T+8Gyk6igcFbU2k0ZRvOh+8Aediu90MrLXX0QWy4xC+anIQdB04t89/1O/w1cDnyilFU="
-LINE_CHANNEL_SECRET = "edc04916b82d3f178f4ce7809876f214"
+LINE_CHANNEL_ACCESS_TOKEN = "zSPZkCTNCHK6WOeSFbtzauErMaY59RvjmlmgAgOZFUJTC+HE/SG25LT9GkyH0jcc/jc1g+UYEuIccUao7WlVQQMwob+/ScM4MtqN6K1T+8HdAmhiKve8zCJG++vDhlhMAOLcEnhPJaHFwrITKxn2ZwdB04t89/1O/w1cDnyilFU="
+LINE_CHANNEL_SECRET = "7e4f1a73af19ff4300f54d520bad761e"
 TARGET_GROUP_ID = "C57ce5ea1a45cb1c2ea9db9868ebd54f8"
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
