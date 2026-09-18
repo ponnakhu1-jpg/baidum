@@ -100,7 +100,7 @@ add_lottery_schedule("ลาวสตาร์VIP", 21, 10)
 add_lottery_schedule("ฮานอยExtar", 21, 30)
 add_lottery_schedule("ลาวกาชาด", 22, 10)
 add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
-add_lottery_schedule("ประชาชนลาว", 2, 32)
+add_lottery_schedule("ประชาชนลาว", 3, 1)
 
 # 🟢 เริ่มทำงาน Scheduler ทันที
 if not scheduler.running:
