@@ -1,3 +1,4 @@
+import random 
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
 from flask import Flask, request, abort
@@ -36,7 +37,12 @@ def handle_message(event):
         TextSendMessage(text=f"คุณส่งข้อความว่า: {event.message.text}")
     )
 def send lottery guidance():
-    line_bot_api.push_message('Ccd80f46ea82114a21319bc2fa4b3b264')"
+    root/_numbers=random.sample(range(0,10),2)
+    spot_numbers=random.sample(range(0,100),10)
+    sets=[random.sample(range(0,1000),6) for_in range(6)]
+    message_text=f"เลขรูด:{root_numbers}nเลขเจาะ:{spot_number}nชุดหวย:{sets}"
+    random/_number=random.randint(10,99)
+    line_bot_api.push_message('Ccd80f46ea82114a21319bc2fa4b3b264'TextSendMessage(text=message_text)"
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
