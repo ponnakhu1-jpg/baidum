@@ -30,6 +30,7 @@ def callback():
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessage)
+ print(event.source.group/_id)
 def handle_message(event):
     line_bot_api.reply_message(
         event.reply_token,
