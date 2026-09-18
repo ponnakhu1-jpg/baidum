@@ -100,6 +100,7 @@ add_lottery_schedule("ลาวสตาร์VIP", 21, 10)
 add_lottery_schedule("ฮานอยExtar", 21, 30)
 add_lottery_schedule("ลาวกาชาด", 22, 10)
 add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
+add_lottery_schedule("ประชาชนลาว", 00, 0)
 
 # 🟢 ล็อกการรัน Scheduler ด้วยระบบไฟล์ล็อก ป้องกันการส่งเบิ้ล 2 รอบ
 def start_scheduler_once():
