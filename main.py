@@ -1,5 +1,6 @@
 import os
 import random
+import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
@@ -15,6 +16,9 @@ TARGET_GROUP_ID = "C57ce5ea1a45cb1c2ea9db9868ebd54f8"
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
+
+# กำหนดเขตเวลาไทยให้ชัดเจน
+bkk_tz = pytz.timezone("Asia/Bangkok")
 
 
 # --- 1. ฟังก์ชันสร้างข้อความแนวทางหวย ---
@@ -45,13 +49,18 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
 
 
 # --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ ---
-scheduler = BackgroundScheduler(timezone="Asia/Bangkok")
+scheduler = BackgroundScheduler(timezone=bkk_tz)
 
 
 def add_lottery_schedule(name, hour, minute):
     """ฟังก์ชันสำหรับเพิ่มชื่อหวยและกำหนดเวลาส่ง"""
     scheduler.add_job(
-        send_lottery_guidance, "cron", hour=hour, minute=minute, args=[name]
+        send_lottery_guidance,
+        "cron",
+        hour=hour,
+        minute=minute,
+        args=[name],
+        timezone=bkk_tz,
     )
 
 
@@ -114,16 +123,14 @@ def callback():
     return "OK"
 
 
-# --- 4. ระบบตอบกลับข้อความในไลน์ (แก้ไขไม่ให้ฟังก์ชันซ้ำกัน) ---
+# --- 4. ระบบตอบกลับข้อความในไลน์ ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.strip()
 
-    # แสดง Group ID ออกทาง Log บน Render ทันทีที่มีคนพิมพ์ข้อความในกลุ่ม
     if event.source.type == "group":
         print(f"📌 Group ID ปัจจุบันคือ: {event.source.group_id}")
 
-    # คำสั่งที่ 1: พิมพ์ "ขอไอดีกลุ่ม" ให้บอทตอบกลับ Group ID มาในไลน์
     if user_msg == "ขอไอดีกลุ่ม":
         if event.source.type == "group":
             group_id = event.source.group_id
@@ -138,7 +145,6 @@ def handle_message(event):
             )
         return
 
-    # คำสั่งที่ 2: พิมพ์ "ขอแนวทาง [ชื่อหวย]"
     if user_msg.startswith("ขอแนวทาง"):
         lottery_name = user_msg.replace("ขอแนวทาง", "").strip()
         if not lottery_name:
@@ -149,7 +155,6 @@ def handle_message(event):
             event.reply_token, TextSendMessage(text=message_text)
         )
 
-    # คำสั่งที่ 3: พิมพ์ "แนวทาง" หรือ "แนวทางหวย"
     elif user_msg in ["แนวทาง", "แนวทางหวย"]:
         message_text = generate_lottery_message("หวยประจำวัน")
         line_bot_api.reply_message(
