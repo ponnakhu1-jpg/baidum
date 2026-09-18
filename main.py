@@ -37,7 +37,7 @@ def send_lottery_guidance():
     root_numbers=random.sample(range(0,10),2)
     spot_numbers=random.sample(range(0,100),10)
     sets=[random.sample(range(0,1000),6)for _ in range(6)]
-    message_text=f"เลขรูด:{'.'join(map(str,root_numbers))}เลขเจาะ{','.join(map(str,spot_number))}6กลับ:{','.join(map(str,sets))}"
+    message_text= f"เลขรูด:{.join(map(str,root_numbers))}เลขเจาะ{,.join(map(str,spot_number))}6กลับ:{.join(map(str,sets))}"
     random_number=random.randint(10,99)
     line_bot_api.push_message('Ccd80f46ea82114a21319bc2fa4b3b264',messages=TextSendMessage(text=message_text))
 if __name__ == "__main__":
