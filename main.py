@@ -20,7 +20,7 @@ LINE_CHANNEL_SECRET = os.environ.get(
 )
 TARGET_GROUP_ID = os.environ.get(
     "TARGET_GROUP_ID", 
-    "C57ce5ea1a45cb1c2ea9db9868ebd54f8"
+    "Cd9bd5f0a1640666114ff9dd35912ea75"
 ).strip()
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
