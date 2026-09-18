@@ -36,7 +36,7 @@ def handle_message(event):
         event.reply_token,
         TextSendMessage(text=f"คุณส่งข้อความว่า: {event.message.text}")
     )
-def send lottery guidance():
+    def send lottery guidance():
     root/_numbers=random.sample(range(0,10),2)
     spot_numbers=random.sample(range(0,100),10)
     sets=[random.sample(range(0,1000),6) for _ in range(6)]
