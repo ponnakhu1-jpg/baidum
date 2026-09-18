@@ -1,4 +1,4 @@
 python-dotenv
 flask 
 line-bot-sdk
-gunicoprn
+gunicorn
