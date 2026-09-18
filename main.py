@@ -117,7 +117,7 @@ def init_scheduler():
     add_lottery_schedule("ฮานอยExtar", 21, 30)
     add_lottery_schedule("ลาวกาชาด", 22, 10)
     add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
-    add_lottery_schedule("ประชาชนลาว", 3, 30)
+    add_lottery_schedule("ประชาชนลาว", 3, 40)
 
     scheduler.start()
     print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว!")
