@@ -1,4 +1,4 @@
 flask==2.0.1
 line-bot-sdk
 gunicorn
-werkzeug&2.3.0
+werkzeug&lt;2.3.0
