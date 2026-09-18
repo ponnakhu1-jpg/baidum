@@ -1,6 +1,8 @@
 import os
 import random
 import pytz
+import atexit
+import fcntl
 from flask import Flask, abort, request
 from apscheduler.schedulers.background import BackgroundScheduler
 from linebot import LineBotApi, WebhookHandler
@@ -9,7 +11,7 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(__name__)
 
-# --- ดึงค่า คีย์และ ID จาก Environment Variables (พร้อมค่า Default) ---
+# --- ดึงค่า คีย์และ ID จาก Environment Variables ---
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get(
     "LINE_CHANNEL_ACCESS_TOKEN",
     "l7iMS9gakB9hsgqoDqlUyzqWYhnVJbHQj19VYUO47gr0qcFier1UsX19Ft9SxUk8hGlQinbpaQrXjNbIS0H6g54I5Js/yW8gpi3k5u/rNdCKsIvIQg6noqrUx+J66bnteLI7K8EW5Ax8YrqZawZ/HAdB04t89/1O/w1cDnyilFU=="
@@ -48,8 +50,7 @@ def generate_lottery_message(lottery_name="แนวทางหวย"):
 def send_lottery_guidance(lottery_name="แนวทางหวย"):
     message_text = generate_lottery_message(lottery_name)
     try:
-        # ตรวจสอบความถูกต้องของ Target Group ID ก่อนยิง
-        target_id = TARGET_GROUP_ID.strip()
+        target_id = os.environ.get("TARGET_GROUP_ID", TARGET_GROUP_ID).strip()
         if not target_id or not target_id.startswith("C"):
             print(f"❌ Error: TARGET_GROUP_ID [{target_id}] ไม่ถูกต้อง (ต้องขึ้นต้นด้วย C)")
             return
@@ -62,11 +63,17 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
         print(f"❌ เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
-# --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ ---
+# --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (ป้องกันรันซ้ำ) ---
 scheduler = BackgroundScheduler(timezone=bkk_tz)
 
-def init_scheduler():
-    if scheduler.running:
+def start_scheduler():
+    # ป้องกันไม่ให้ Scheduler รันซ้ำด้วย File Lock ในระบบ Linux (Render)
+    lock_file_path = "/tmp/scheduler.lock"
+    try:
+        fp = open(lock_file_path, "wb")
+        fcntl.flock(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, OSError):
+        print("⚠️ Worker อื่นกำลังรัน Scheduler อยู่แล้ว ปิดใช้งานใน Worker นี้เพื่อป้องกันข้อความเบิ้ล")
         return
 
     def add_lottery_schedule(name, hour, minute):
@@ -117,13 +124,16 @@ def init_scheduler():
     add_lottery_schedule("ฮานอยExtar", 21, 30)
     add_lottery_schedule("ลาวกาชาด", 22, 10)
     add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
-    add_lottery_schedule("ประชาชนลาว", 3, 40)
+    add_lottery_schedule("ประชาชนลาว", 3, 30)
 
-    scheduler.start()
-    print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว!")
+    if not scheduler.running:
+        scheduler.start()
+        print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว! (Single Instance Lock active)")
 
-# เรียกใช้งาน Scheduler
-init_scheduler()
+    atexit.register(lambda: scheduler.shutdown(wait=False))
+
+# เริ่มทำงานระบบตั้งเวลา
+start_scheduler()
 
 
 # --- Webhook Routes ---
