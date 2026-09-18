@@ -113,18 +113,32 @@ def callback():
 
     return "OK"
 
+
+# --- 4. ระบบตอบกลับข้อความในไลน์ (แก้ไขไม่ให้ฟังก์ชันซ้ำกัน) ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.strip()
 
-    # 🟢 แทรกตรงบรรทัดที่ 116: สั่งพิมพ์ Group ID ออกทาง Log บน Render
+    # แสดง Group ID ออกทาง Log บน Render ทันทีที่มีคนพิมพ์ข้อความในกลุ่ม
     if event.source.type == "group":
         print(f"📌 Group ID ปัจจุบันคือ: {event.source.group_id}")
-# --- 4. ระบบตอบกลับข้อความในไลน์ ---
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_msg = event.message.text.strip()
 
+    # คำสั่งที่ 1: พิมพ์ "ขอไอดีกลุ่ม" ให้บอทตอบกลับ Group ID มาในไลน์
+    if user_msg == "ขอไอดีกลุ่ม":
+        if event.source.type == "group":
+            group_id = event.source.group_id
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"Group ID ของกลุ่มนี้คือ:\n{group_id}"),
+            )
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="คำสั่งนี้ใช้ได้เฉพาะในกลุ่มไลน์ครับ"),
+            )
+        return
+
+    # คำสั่งที่ 2: พิมพ์ "ขอแนวทาง [ชื่อหวย]"
     if user_msg.startswith("ขอแนวทาง"):
         lottery_name = user_msg.replace("ขอแนวทาง", "").strip()
         if not lottery_name:
@@ -135,6 +149,7 @@ def handle_message(event):
             event.reply_token, TextSendMessage(text=message_text)
         )
 
+    # คำสั่งที่ 3: พิมพ์ "แนวทาง" หรือ "แนวทางหวย"
     elif user_msg in ["แนวทาง", "แนวทางหวย"]:
         message_text = generate_lottery_message("หวยประจำวัน")
         line_bot_api.reply_message(
