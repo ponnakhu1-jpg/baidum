@@ -60,11 +60,39 @@ def add_lottery_schedule(name, hour, minute):
 # 🎯 ส่วนตั้งชื่อหวยและเวลาส่งอัตโนมัติ (แก้ไข/เพิ่มตรงนี้ได้เลย)
 # รูปแบบ: add_lottery_schedule("ชื่อหวย", ชั่วโมง, นาที)
 # =========================================================
-add_lottery_schedule("หุ้นนิเคอิ เช้า", 9, 30)  # ส่ง 09:30 น.
-add_lottery_schedule("ฮานอยพิเศษ", 17, 15)  # ส่ง 17:15 น.
-add_lottery_schedule("ฮานอยปกติ", 18, 15)  # ส่ง 18:15 น.
-add_lottery_schedule("ลาวพัฒนา", 20, 0)  # ส่ง 20:00 น.
-
+add_lottery_schedule("ลาวExtar", 8, 00)  
+add_lottery_schedule("นิเคอิเช้า+VIP", 8, 30) 
+add_lottery_schedule("ฮานอยอาเซียน", 8, 30)  # ส่ง 18:15 น.
+add_lottery_schedule("จีนเช้า+VIP", 09, 30)  # ส่ง 20:00 น.
+add_lottery_schedule("ลาวTV", 10, 00)
+add_lottery_schedule("ฮั่งเช้า+VIP", 10, 00)
+add_lottery_schedule("ฮานอยHD", 10, 30)
+add_lottery_schedule("ใต้หวัน+VIP", 11, 00)
+add_lottery_schedule("ฮานอยStar", 11, 30)
+add_lottery_schedule("เกาหลี+VIP", 12, 00)
+add_lottery_schedule("นิเคอิบ่าย+VIP", 12, 30)
+add_lottery_schedule("ลาวHD", 13, 00)
+add_lottery_schedule("จีนบ่าย+VIP", 13, 10)
+add_lottery_schedule("ฮานอยTV", 13, 30)
+add_lottery_schedule("ฮั่งเส็งบ่าย+VIP", 14, 30)
+add_lottery_schedule("ลาวสตาร์", 15, 00)
+add_lottery_schedule("สิงคโปร์+VIP", 15, 20)
+add_lottery_schedule("ไทยเย็น", 16, 00)
+add_lottery_schedule("ฮานอยกาชาด", 15, 30)
+add_lottery_schedule("ฮานอยพิเศษ", 16, 30)
+add_lottery_schedule("ฮานอยสามัคคี", 16, 30)
+add_lottery_schedule("ฮานอยปกติ", 17, 30)
+add_lottery_schedule("ฮานอยVIP", 18, 30)
+add_lottery_schedule("ฮานอยพัฒนา", 18, 30)
+add_lottery_schedule("ลาวสามัคคี", 19, 30)
+add_lottery_schedule("ลาวอาเซียน", 20, 00)
+add_lottery_schedule("ลาวVIP", 20, 30)
+add_lottery_schedule("ลาวสามัคคีVIP", 20, 30)
+add_lottery_schedule("3รัฐ+VIP", 21, 10)
+add_lottery_schedule("ลาวสตาร์VIP", 21, 10)
+add_lottery_schedule("ฮานอยExtar", 21, 30)
+add_lottery_schedule("ลาวกาชาด", 22, 00)
+add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
 scheduler.start()
 
 
