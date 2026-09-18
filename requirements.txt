@@ -1,6 +1,6 @@
-python-dotenv
-flask 
+Flask
 line-bot-sdk
-gunicorn
 APScheduler
+gunicorn
+pytz
 tzdata
