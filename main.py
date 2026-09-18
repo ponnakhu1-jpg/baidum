@@ -37,7 +37,7 @@ def handle_message(event):
         TextSendMessage(text=f"คุณส่งข้อความว่า: {event.message.text}")
     )
 def send_lottery_guidance():
-    root/_numbers=random.sample(range(0,10),2)
+    root_numbers=random.sample(range(0,10),2)
     spot_numbers=random.sample(range(0,100),10)
     sets=[random.sample(range(0,1000),6) for _in range(6)]
     message_text=f"เลขรูด:{root_numbers}nเลขเจาะ:{spot_number}nชุดหวย:{sets}"
