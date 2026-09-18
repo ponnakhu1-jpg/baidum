@@ -17,50 +17,58 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 
-# --- ฟังก์ชันสร้างข้อความแนวทางหวย ---
-def generate_lottery_message():
+# --- 1. ฟังก์ชันสร้างข้อความแนวทางหวย (ระบุชื่อหวยได้) ---
+def generate_lottery_message(lottery_name="แนวทางหวย"):
     root_numbers = random.sample(range(0, 10), 2)
     spot_numbers = random.sample(range(0, 100), 10)
     sets = random.sample(range(0, 1000), 6)
 
     message_text = (
-        f"\nเลขรูด:{','.join(map(str, root_numbers))}"
-        f"\nเลขเจาะ:{','.join(f'{int(x):02d}' for x in spot_numbers)}"
-        f"\n6กลับ:{','.join(f'{int(x):03d}' for x in sets)}"
+        f"📌 แนวทาง {lottery_name}\n"
+        f"เลขรูด:{','.join(map(str, root_numbers))}\n"
+        f"เลขเจาะ:{','.join(f'{int(x):02d}' for x in spot_numbers)}\n"
+        f"6กลับ:{','.join(f'{int(x):03d}' for x in sets)}"
     )
     return message_text
 
 
-# --- ฟังก์ชันส่งแนวทางหวยไปยังกลุ่มที่กำหนด (Push Message) ---
-def send_lottery_guidance():
-    message_text = generate_lottery_message()
+# --- 2. ฟังก์ชันส่งแนวทางหวยอัตโนมัติตามชื่อหวย ---
+def send_lottery_guidance(lottery_name="แนวทางหวย"):
+    message_text = generate_lottery_message(lottery_name)
     try:
         line_bot_api.push_message(
             TARGET_GROUP_ID, messages=TextSendMessage(text=message_text)
         )
-        print("ส่งแนวทางอัตโนมัติเรียบร้อยแล้ว!")
+        print(f"ส่งแนวทาง [{lottery_name}] เรียบร้อยแล้ว!")
     except Exception as e:
-        print(f"เกิดข้อผิดพลาดในการส่งPush Message: {e}")
+        print(f"เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
-# --- ระบบตั้งเวลาส่งอัตโนมัติ (APScheduler) ---
+# --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ ---
 scheduler = BackgroundScheduler(timezone="Asia/Bangkok")
 
-# กำหนดเวลาส่งตามที่คุณต้องการ (แก้ไข/เพิ่ม-ลด เวลาได้ตามสะดวก)
-scheduler.add_job(
-    send_lottery_guidance, "cron", hour=9, minute=30
-)  # รอบเช้า 09:30 น.
-scheduler.add_job(
-    send_lottery_guidance, "cron", hour=15, minute=30
-)  # รอบบ่าย 15:30 น.
-scheduler.add_job(
-    send_lottery_guidance, "cron", hour=20, minute=0
-)  # รอบค่ำ 20:00 น.
+
+# ฟังก์ชันช่วยเพิ่มชื่อหวยและเวลาส่งลงในระบบ Scheduler
+def add_lottery_schedule(name, hour, minute):
+    """ฟังก์ชันสำหรับเพิ่มชื่อหวยและกำหนดเวลาส่ง"""
+    scheduler.add_job(
+        send_lottery_guidance, "cron", hour=hour, minute=minute, args=[name]
+    )
+
+
+# =========================================================
+# 🎯 ส่วนตั้งชื่อหวยและเวลาส่งอัตโนมัติ (แก้ไข/เพิ่มตรงนี้ได้เลย)
+# รูปแบบ: add_lottery_schedule("ชื่อหวย", ชั่วโมง, นาที)
+# =========================================================
+add_lottery_schedule("หุ้นนิเคอิ เช้า", 9, 30)  # ส่ง 09:30 น.
+add_lottery_schedule("ฮานอยพิเศษ", 17, 15)  # ส่ง 17:15 น.
+add_lottery_schedule("ฮานอยปกติ", 18, 15)  # ส่ง 18:15 น.
+add_lottery_schedule("ลาวพัฒนา", 20, 0)  # ส่ง 20:00 น.
 
 scheduler.start()
 
 
-# --- Webhook สำหรับตรวจสอบสถานะ Server ---
+# --- Webhook Routes ---
 @app.route("/", methods=["GET"])
 def home():
     return "Line Bot Scheduler is running!", 200
@@ -79,14 +87,26 @@ def callback():
     return "OK"
 
 
-# --- ระบบตอบกลับข้อความอัตโนมัติ (Reply Message) ---
+# --- 4. ระบบตอบกลับข้อความในไลน์ (ดึงชื่อหวยจากข้อความที่พิมพ์มาได้) ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.strip()
 
-    # เมื่อมีคนพิมพ์คำว่า "แนวทาง", "ขอแนวทาง", หรือ "แนวทางหวย" บอทจะแจกเลขสดๆ ทันที
-    if user_msg in ["แนวทาง", "ขอแนวทาง", "แนวทางหวย"]:
-        message_text = generate_lottery_message()
+    # กรณีพิมพ์คำว่า "ขอแนวทาง [ชื่อหวย]" เช่น "ขอแนวทาง ฮานอย"
+    if user_msg.startswith("ขอแนวทาง"):
+        # ดึงชื่อหวยจากคำที่พิมพ์ต่อท้าย
+        lottery_name = user_msg.replace("ขอแนวทาง", "").strip()
+        if not lottery_name:
+            lottery_name = "หวยประจำวัน"
+
+        message_text = generate_lottery_message(lottery_name)
+        line_bot_api.reply_message(
+            event.reply_token, TextSendMessage(text=message_text)
+        )
+
+    # กรณีพิมพ์คำว่า "แนวทาง" หรือ "แนวทางหวย" สั้นๆ
+    elif user_msg in ["แนวทาง", "แนวทางหวย"]:
+        message_text = generate_lottery_message("หวยประจำวัน")
         line_bot_api.reply_message(
             event.reply_token, TextSendMessage(text=message_text)
         )
