@@ -17,7 +17,6 @@ TARGET_GROUP_ID = "C57ce5ea1a45cb1c2ea9db9868ebd54f8"
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# กำหนดเขตเวลาไทย
 bkk_tz = pytz.timezone("Asia/Bangkok")
 
 
@@ -48,12 +47,11 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
         print(f"เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
-# --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ ---
+# --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (แก้ไขป้องกันการรันซ้ำ) ---
 scheduler = BackgroundScheduler(timezone=bkk_tz)
 
 
 def add_lottery_schedule(name, hour, minute):
-    """ฟังก์ชันสำหรับเพิ่มชื่อหวยและกำหนดเวลาส่ง"""
     scheduler.add_job(
         send_lottery_guidance,
         "cron",
@@ -103,9 +101,19 @@ add_lottery_schedule("ฮานอยExtar", 21, 30)
 add_lottery_schedule("ลาวกาชาด", 22, 10)
 add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
 
-# ป้องกันไม่ให้ Scheduler เริ่มรันซ้ำซ้อนใน Gunicorn
-if not scheduler.running:
-    scheduler.start()
+# 🟢 ล็อกการรัน Scheduler ด้วยระบบไฟล์ล็อก ป้องกันการส่งเบิ้ล 2 รอบ
+def start_scheduler_once():
+    if not os.path.exists("scheduler.lock"):
+        try:
+            with open("scheduler.lock", "w") as f:
+                f.write("locked")
+            if not scheduler.running:
+                scheduler.start()
+                print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว (Master Process)")
+        except Exception as e:
+            print(f"Lock error: {e}")
+
+start_scheduler_once()
 
 
 # --- Webhook Routes ---
@@ -114,7 +122,6 @@ def home():
     return "Line Bot Scheduler is running!", 200
 
 
-# 🟢 สั่งยิงข้อความทดสอบเข้ากลุ่มทันทีผ่านลิงก์เว็บ
 @app.route("/test-push", methods=["GET"])
 def test_push():
     try:
