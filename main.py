@@ -1,17 +1,12 @@
 import os
 import random
-import shutil
-import time
+import requests  # ใช้ดึงข้อมูลเว็บแบบเบาสบาย
+from bs4 import BeautifulSoup  # ใช้แกะข้อความใน HTML
 from datetime import datetime, timedelta, timezone
 from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
 
@@ -58,54 +53,35 @@ def get_thai_date():
   return f"{day} {month} {year}"
 
 
-# --- 1. ฟังก์ชันดึงผลหวยจากเว็บเป้าหมายอัตโนมัติ (แก้ปัญหาหา Chrome Binary ไม่เจอ) ---
+# --- 1. ฟังก์ชันดึงผลหวยด้วย Requests + BeautifulSoup (เร็วและไม่ใช้ Chrome) ---
 def fetch_lottery_result_from_web(lottery_name):
-  driver = None
   try:
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # รันแบบซ่อนหน้าจอ
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-
-    # ตรวจหาเส้นทางของ Chromium บน Linux ของ Render ให้ถูกต้อง
-    common_paths = [
-        "/usr/bin/chromium",
-        "/usr/bin/chromium-browser",
-        "/usr/bin/google-chrome",
-    ]
-    for path in common_paths:
-      if os.path.exists(path):
-        chrome_options.binary_location = path
-        break
-
-    # กำหนด ChromeDriver
-    chromedriver_bin = shutil.which("chromedriver") or "/usr/bin/chromedriver"
-    if os.path.exists(chromedriver_bin):
-      service = Service(chromedriver_bin)
-    else:
-      service = Service(ChromeDriverManager().install())
-
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-
-    # 🔗 ลิงก์เว็บไซต์เป้าหมาย
     target_url = "https://xn--t3cmiit.com/stock-lottery#vip"
-    driver.get(target_url)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
 
-    # รอให้หน้าเว็บโหลด JavaScript แสดงผลตาราง (5 วินาที)
-    time.sleep(5)
+    response = requests.get(target_url, headers=headers, timeout=10)
+    if response.status_code != 200:
+      return (
+          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+          f"📅 ประจำวันที่: {get_thai_date()}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"❌ ไม่สามารถเชื่อมต่อกับเว็บไซต์เป้าหมายได้"
+      )
 
-    # อ่านข้อความทั้งหมดในหน้าเว็บ
-    body_element = driver.find_element(By.TAG_NAME, "body")
-    page_text = body_element.text
+    # แกะข้อความด้วย BeautifulSoup
+    soup = BeautifulSoup(response.text, "html.parser")
+    page_text = soup.get_text()
 
-    # ค้นหาข้อความที่เกี่ยวกับชื่อหวยที่ระบุ
     extracted_lines = []
     for line in page_text.split("\n"):
-      if lottery_name in line:
-        extracted_lines.append(line.strip())
-
-    driver.quit()
+      cleaned_line = line.strip()
+      if cleaned_line and lottery_name in cleaned_line:
+        extracted_lines.append(cleaned_line)
 
     if extracted_lines:
       result_detail = "\n".join(extracted_lines[:3])
@@ -125,17 +101,12 @@ def fetch_lottery_result_from_web(lottery_name):
     )
 
   except Exception as e:
-    print(f"❌ Error during web scraping: {e}")
-    if driver:
-      try:
-        driver.quit()
-      except Exception:
-        pass
+    print(f"❌ Error during scraping: {e}")
     return (
         f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
         f"📅 ประจำวันที่: {get_thai_date()}\n"
         f"━━━━━━━━━━━━━━━\n"
-        f"❌ เกิดข้อผิดพลาดในการดึงข้อมูลจากเว็บไซต์: {e}"
+        f"❌ เกิดข้อผิดพลาดในการดึงข้อมูล: {e}"
     )
 
 
@@ -158,7 +129,7 @@ def generate_lottery_message(lottery_name="แนวทางหวย"):
 # --- Webhook & API Routes ---
 @app.route("/", methods=["GET"])
 def home():
-  return "Line Bot ใบดำนำโชค (Auto Scraping) is running smoothly!", 200
+  return "Line Bot ใบดำนำโชค (Requests Engine) is running smoothly!", 200
 
 
 @app.route("/callback", methods=["POST"])
@@ -197,7 +168,7 @@ def handle_message(event):
       )
     return
 
-  # 2. ตรวจผลหวยอัตโนมัติจากเว็บ: พิมพ์ "ผลหวยนิเคอิ" หรือ "ตรวจหวยฮานอย"
+  # 2. ตรวจผลหวยอัตโนมัติจากเว็บ
   if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
     lottery_name = (
         user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
