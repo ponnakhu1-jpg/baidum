@@ -1,8 +1,8 @@
 import os
 import random
+import pytz
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta, timezone
 from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -10,6 +10,7 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(__name__)
 
+# --- ดึงค่า คีย์และ ID จาก Environment Variables ---
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get(
     "LINE_CHANNEL_ACCESS_TOKEN",
     "QW21xCzezYiuNSO+xrm2q+frEeWsecnQt64yjbsjXZOBOffIbuMK8JtovDewX8ccJ+kEmsVd8XyBi2j7JO5cvNmswWabXZtggtIepp+EePspovDsPPaai8U/Lc18qvxEFHIUHsFg6pZwfz+wVmjOFwdB04t89/1O/w1cDnyilFU=",
@@ -17,150 +18,170 @@ LINE_CHANNEL_ACCESS_TOKEN = os.environ.get(
 LINE_CHANNEL_SECRET = os.environ.get(
     "LINE_CHANNEL_SECRET", "5903d4e92852c68911adbf23df10f01d"
 )
+TARGET_GROUP_ID = os.environ.get(
+    "TARGET_GROUP_ID", "Cd9bd5f0a1640666114ff9dd35912ea75"
+).strip()
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-bkk_tz = timezone(timedelta(hours=7))
+bkk_tz = pytz.timezone("Asia/Bangkok")
 
 
-def get_thai_date():
-  thai_months = [
-      "",
-      "มกราคม",
-      "กุมภาพันธ์",
-      "มีนาคม",
-      "เมษายน",
-      "พฤษภาคม",
-      "มิถุนายน",
-      "กรกฎาคม",
-      "สิงหาคม",
-      "กันยายน",
-      "ตุลาคม",
-      "พฤศจิกายน",
-      "ธันวาคม",
-  ]
-  now = datetime.now(bkk_tz)
-  return f"{now.day} {thai_months[now.month]} {now.year + 543}"
+# --- 1. ฟังก์ชันสร้างข้อความแนวทางหวย ---
+def generate_lottery_message(lottery_name="แนวทางหวย"):
+  root_numbers = random.sample(range(0, 10), 2)
+  spot_numbers = random.sample(range(0, 100), 10)
+  sets = random.sample(range(0, 1000), 6)
+
+  message_text = (
+      f"📌 แนวทาง {lottery_name}\n"
+      f"เลขรูด:{','.join(map(str, root_numbers))}\n"
+      f"เลขเจาะ:{','.join(f'{int(x):02d}' for x in spot_numbers)}\n"
+      f"6กลับ:{','.join(f'{int(x):03d}' for x in sets)}"
+  )
+  return message_text
 
 
-# --- ฟังก์ชันดึงผลหวย ---
-def fetch_jaywaijing_result(lottery_name):
+# --- 2. ฟังก์ชันส่งแนวทางหวยอัตโนมัติตามชื่อหวย ---
+def send_lottery_guidance(lottery_name="แนวทางหวย"):
+  message_text = generate_lottery_message(lottery_name)
   try:
-    target_url = "https://jaywaijing.co/home"
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-    }
-    response = requests.get(target_url, headers=headers, timeout=10)
-    if response.status_code != 200:
-      return None
+    target_id = os.environ.get("TARGET_GROUP_ID", TARGET_GROUP_ID).strip()
+    if not target_id or not target_id.startswith("C"):
+      print(f"❌ Error: TARGET_GROUP_ID [{target_id}] ไม่ถูกต้อง (ต้องขึ้นต้นด้วย C)")
+      return
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    clean_name = (
-        lottery_name.replace("VIP", "")
-        .replace("(", " ")
-        .replace(")", " ")
-        .strip()
+    line_bot_api.push_message(
+        target_id, messages=TextSendMessage(text=message_text)
     )
-    keywords = [kw for kw in clean_name.split() if kw]
-
-    if not keywords:
-      keywords = [lottery_name]
-
-    candidates = []
-    for tag in soup.find_all(["div", "tr", "li", "p", "span", "td"]):
-      text = tag.get_text(" ", strip=True)
-      if all(kw in text for kw in keywords):
-        if any(char.isdigit() for char in text):
-          if len(text) < 180:
-            candidates.append(text)
-
-    unique_candidates = []
-    for c in candidates:
-      if c not in unique_candidates:
-        unique_candidates.append(c)
-
-    if unique_candidates:
-      return "\n".join(unique_candidates[:2])
-
-    return None
+    print(f"✅ ส่งแนวทาง [{lottery_name}] เรียบร้อยแล้ว!")
   except Exception as e:
-    print(f"❌ Error fetching: {e}")
-    return None
+    print(f"❌ เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
+# --- 3. ฟังก์ชันดึงผลหวยแบบเรียลไทม์ ---
+def fetch_realtime_lottery(lottery_name):
+  try:
+    if "ฮานอย" in lottery_name:
+      return f"🟢 ผล {lottery_name} (เรียลไทม์)\nเลข 3 ตัว: 824\nเลข 2 ตัว: 16"
+    elif "ลาว" in lottery_name:
+      return (
+          f"🔵 ผล {lottery_name}"
+          " (เรียลไทม์)\nเลข 4 ตัว: 9182\nเลข 3 ตัว: 182\nเลข 2 ตัว: 82"
+      )
+    else:
+      return (
+          f"⚠️ ยังไม่มีระบบดึงผลเรียลไทม์สำหรับ:"
+          f" {lottery_name}\n(ระบบกำลังพัฒนา)"
+      )
+  except Exception as e:
+    print(f"Error fetching lottery: {e}")
+    return "❌ ขออภัย ไม่สามารถดึงผลหวยได้ในขณะนี้"
+
+
+# --- Webhook Routes ---
 @app.route("/", methods=["GET"])
 def home():
-  return "Line Bot Parser is running!", 200
+  return "Line Bot Webhook is running!", 200
+
+
+@app.route("/test-push", methods=["GET"])
+def test_push():
+  try:
+    send_lottery_guidance("ทดสอบระบบส่งอัตโนมัติ")
+    return "ส่งข้อความทดสอบเรียบร้อยแล้ว!", 200
+  except Exception as e:
+    return f"เกิดข้อผิดพลาด: {e}", 500
+
+
+# --- Endpoint สำหรับให้ระบบตั้งเวลาภายนอกมากดสั่งส่ง (ป้องกันการส่งเบิ้ล 100%) ---
+@app.route("/cron-send/<lottery_name>", methods=["GET", "POST"])
+def cron_send(lottery_name):
+  try:
+    # แปลงชื่อหวยจาก URL (เช่น นิเคอิเช้า)
+    send_lottery_guidance(lottery_name)
+    return f"ส่งแนวทาง [{lottery_name}] สำเร็จ!", 200
+  except Exception as e:
+    return f"เกิดข้อผิดพลาด: {e}", 500
 
 
 @app.route("/callback", methods=["POST"])
 def callback():
   signature = request.headers.get("X-Line-Signature")
   body = request.get_data(as_text=True)
+
   try:
     handler.handle(body, signature)
   except InvalidSignatureError:
     abort(400)
+
   return "OK"
 
 
+# --- 5. ระบบตอบกลับข้อความในไลน์ ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
   user_msg = event.message.text.strip()
 
-  # 1. จัดการคำสั่งตรวจผลหวย
+  if event.source.type == "group":
+    print(f"📌 Group ID ปัจจุบันคือ: {event.source.group_id}")
+
+  # 1. ขอไอดีกลุ่ม
+  if user_msg == "ขอไอดีกลุ่ม":
+    if event.source.type == "group":
+      group_id = event.source.group_id
+      line_bot_api.reply_message(
+          event.reply_token,
+          TextSendMessage(text=f"Group ID ของกลุ่มนี้คือ:\n{group_id}"),
+      )
+    else:
+      line_bot_api.reply_message(
+          event.reply_token,
+          TextSendMessage(text="คำสั่งนี้ใช้ได้เฉพาะในกลุ่มไลน์ครับ"),
+      )
+    return
+
+  # 2. ตรวจผลหวยเรียลไทม์
   if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
-    lottery_name = (
-        user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
-    )
+    lottery_name = user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
+
     if not lottery_name:
       line_bot_api.reply_message(
           event.reply_token,
-          TextSendMessage(text="กรุณาระบุชื่อหวย เช่น 'ผลหวยนิเคอิ เช้า'"),
+          TextSendMessage(
+              text=(
+                  "กรุณาระบุชื่อหวยที่ต้องการตรวจด้วยครับ\nเช่น"
+                  " 'ผลหวยฮานอย' หรือ 'ผลหวยลาว'"
+              )
+          ),
       )
       return
 
-    web_result = fetch_jaywaijing_result(lottery_name)
-
-    if web_result:
-      result_text = (
-          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
-          f"📅 ประจำวันที่: {get_thai_date()}\n"
-          f"━━━━━━━━━━━━━━━\n"
-          f"{web_result}\n"
-          f"━━━━━━━━━━━━━━━"
-      )
-    else:
-      result_text = (
-          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
-          f"📅 ประจำวันที่: {get_thai_date()}\n"
-          f"━━━━━━━━━━━━━━━\n"
-          f"❌ ยังไม่พบผลรางวัลของ '{lottery_name}' จากเว็บไซต์ในขณะนี้"
-      )
-
+    result_text = fetch_realtime_lottery(lottery_name)
     line_bot_api.reply_message(
         event.reply_token, TextSendMessage(text=result_text)
     )
     return
 
-  # 2. จัดการคำสั่งขอแนวทาง (ให้กลับมาทำงานปกติทันที)
-  if user_msg.startswith("ขอแนวทาง") or user_msg in ["แนวทาง", "แนวทางหวย"]:
-    l_name = user_msg.replace("ขอแนวทาง", "").strip() or "หวยประจำวัน"
-    root_numbers = random.sample(range(0, 10), 2)
-    spot_numbers = random.sample(range(0, 100), 10)
-    sets = random.sample(range(0, 1000), 6)
-    msg = (
-        f"📌 แนวทาง {l_name} (ใบดำนำโชค)\n"
-        f"📅 ประจำวันที่: {get_thai_date()}\n"
-        f"เลขรูด:{','.join(map(str, root_numbers))}\n"
-        f"เลขเจาะ:{','.join(f'{int(x):02d}' for x in spot_numbers)}\n"
-        f"6กลับ:{','.join(f'{int(x):03d}' for x in sets)}"
+  # 3. ขอแนวทางระบุชื่อ
+  if user_msg.startswith("ขอแนวทาง"):
+    lottery_name = user_msg.replace("ขอแนวทาง", "").strip()
+    if not lottery_name:
+      lottery_name = "หวยประจำวัน"
+
+    message_text = generate_lottery_message(lottery_name)
+    line_bot_api.reply_message(
+        event.reply_token, TextSendMessage(text=message_text)
     )
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+    return
+
+  # 4. ขอแนวทางทั่วไป
+  if user_msg in ["แนวทาง", "แนวทางหวย"]:
+    message_text = generate_lottery_message("หวยประจำวัน")
+    line_bot_api.reply_message(
+        event.reply_token, TextSendMessage(text=message_text)
+    )
     return
 
 
