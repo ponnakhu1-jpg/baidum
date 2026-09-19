@@ -1,7 +1,6 @@
 import os
 import random
-from datetime import datetime
-import pytz
+from datetime import datetime, timedelta, timezone
 from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -24,16 +23,17 @@ TARGET_GROUP_ID = os.environ.get(
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-bkk_tz = pytz.timezone("Asia/Bangkok")
+# กำหนดโซนเวลาประเทศไทย (UTC+7) แบบไม่ต้องใช้ไลบรารีเสริม
+bkk_tz = timezone(timedelta(hours=7))
 
-# ตัวแปรเก็บผลหวยชั่วคราวในระบบบอท
+# ฐานข้อมูลเก็บผลหวยชั่วคราว
 lottery_database = {
     "ฮานอย": {"top": "824", "bottom": "16"},
     "ลาว": {"top": "182", "bottom": "82"},
 }
 
 
-# --- ฟังก์ชันช่วยแปลงวันที่เป็นภาษาไทย ---
+# --- ฟังก์ชันแปลงวันที่เป็นภาษาไทย ---
 def get_thai_date():
   thai_months = [
       "",
@@ -73,7 +73,7 @@ def generate_lottery_message(lottery_name="แนวทางหวย"):
   return message_text
 
 
-# --- 2. ฟังก์ชันส่งแนวทางหวยอัตโนมัติตามชื่อหวย ---
+# --- 2. ฟังก์ชันส่งแนวทางหวยอัตโนมัติเข้ากลุ่ม ---
 def send_lottery_guidance(lottery_name="แนวทางหวย"):
   message_text = generate_lottery_message(lottery_name)
   try:
@@ -87,19 +87,19 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
     )
     print(f"✅ ส่งแนวทาง [{lottery_name}] เรียบร้อยแล้ว!")
   except Exception as e:
-    print(f"❌ เกิดข้อผิดพลาด: {e}")
+    print(f"❌ เกิดข้อผิดพลาดในการส่งแนวทาง: {e}")
 
 
 # --- Webhook & API Routes ---
 @app.route("/", methods=["GET"])
 def home():
-  return "Line Bot ใบดำนำโชค is running!", 200
+  return "Line Bot ใบดำนำโชค is running smoothly!", 200
 
 
 @app.route("/test-push", methods=["GET"])
 def test_push():
   try:
-    send_lottery_guidance("ทดสอบระบบส่งอัตโนมัติ")
+    send_lottery_guidance("ทดสอบระบบ")
     return "ส่งข้อความทดสอบเรียบร้อยแล้ว!", 200
   except Exception as e:
     return f"เกิดข้อผิดพลาด: {e}", 500
@@ -150,7 +150,7 @@ def handle_message(event):
       )
     return
 
-  # 2. คำสั่งสำหรับแอดมินตั้งค่าผลหวย: พิมพ์ "เซ็ตผล ฮานอย 824 16"
+  # 2. ตั้งค่าผลหวย: พิมพ์ "เซ็ตผล ฮานอย 824 16"
   if user_msg.startswith("เซ็ตผล") or user_msg.startswith("ตั้งค่าผล"):
     parts = user_msg.split()
     if len(parts) >= 4:
@@ -178,7 +178,7 @@ def handle_message(event):
       )
     return
 
-  # 3. สมาชิกหรือแอดมินพิมพ์ตรวจผล: พิมพ์ "ผลหวยฮานอย" หรือ "ตรวจหวยฮานอย"
+  # 3. ตรวจผลหวย: พิมพ์ "ผลหวยฮานอย" หรือ "ตรวจหวยฮานอย"
   if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
     lottery_name = (
         user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
@@ -194,7 +194,6 @@ def handle_message(event):
       )
       return
 
-    # ค้นหาชื่อหวยในระบบที่บันทึกไว้
     found_result = None
     for key in lottery_database:
       if key in lottery_name:
@@ -246,5 +245,5 @@ def handle_message(event):
 
 
 if __name__ == "__main__":
-  port = int(os.environ.get("PORT", 5000))
-  app.run(host="0.0.0.0", port=port)
+  port = int(os.environ.GENT("PORT", 5000)) if "PORT" in os.environ else 5000
+  app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
