@@ -1,13 +1,12 @@
 import os
 import random
+import shutil
 import time
 from datetime import datetime, timedelta, timezone
 from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-
-# ไลบรารีสำหรับดึงข้อมูลจากเว็บแบบอัตโนมัติ (Selenium)
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -59,9 +58,9 @@ def get_thai_date():
   return f"{day} {month} {year}"
 
 
-# --- 1. ฟังก์ชันดึงผลหวยจากเว็บไซต์เป้าหมายอัตโนมัติ ---
+# --- 1. ฟังก์ชันดึงผลหวยจากเว็บเป้าหมายอัตโนมัติ ---
 def fetch_lottery_result_from_web(lottery_name):
-  """ฟังก์ชันใช้ Selenium จำลองเปิดเว็บเพื่อกวาดตัวเลขผลหวยอัตโนมัติ"""
+  driver = None
   try:
     chrome_options = Options()
     chrome_options.add_argument("--headless")  # รันแบบซ่อนหน้าจอ
@@ -69,34 +68,69 @@ def fetch_lottery_result_from_web(lottery_name):
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
 
-    # ติดตั้งและเปิดเบราว์เซอร์จำลอง
-    service = Service(ChromeDriverManager().install())
+    # ตรวจหาไฟล์ Chromium ที่ติดตั้งไว้บน Render (ผ่าน apt.txt)
+    chromium_bin = shutil.which("chromium") or shutil.which("chromium-browser")
+    if chromium_bin:
+      chrome_options.binary_location = chromium_bin
+
+    chromedriver_bin = shutil.which("chromedriver")
+    if chromedriver_bin:
+      service = Service(chromedriver_bin)
+    else:
+      service = Service(ChromeDriverManager().install())
+
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
-    # 🔗 ใส่ URL เว็บไซต์ที่คุณต้องการให้บอทวิ่งเข้าไปดึงข้อมูลตรงนี้
-    # (เปลี่ยนเป็นลิงก์เว็บจริงที่คุณใช้งานอยู่)
-    target_url = "https://example.com/lottery-results"
+    # 🔗 ลิงก์เว็บไซต์เป้าหมาย
+    target_url = "https://xn--t3cmiit.com/stock-lottery#vip"
     driver.get(target_url)
 
-    # รอให้หน้าเว็บโหลด JavaScript แสดงผลตัวเลขสักครู่ (ปรับเวลาได้ตามความเหมาะสม)
-    time.sleep(3)
+    # รอให้หน้าเว็บโหลด JavaScript แสดงผลตาราง (5 วินาที)
+    time.sleep(5)
 
-    # ตัวอย่าง: ค้นหาข้อความหรือดึงข้อมูลจากตารางหน้าเว็บ
-    # (คุณสามารถปรับ Selector ของ BeautifulSoup หรือ Selenium ตามโครงสร้างเว็บจริงได้ที่นี่)
-    page_text = driver.find_element(By.TAG_NAME, "body").text
+    # อ่านข้อความทั้งหมดในหน้าเว็บ
+    body_element = driver.find_element(By.TAG_NAME, "body")
+    page_text = body_element.text
+
+    # ค้นหา บรรทัด หรือ ข้อความที่เกี่ยวกับชื่อหวยที่ระบุ
+    extracted_lines = []
+    for line in page_text.split("\n"):
+      if lottery_name in line:
+        extracted_lines.append(line.strip())
+
     driver.quit()
 
-    # สมมติฐาน: ถ้าดึงข้อความจากเว็บมาได้ เราจะนำมาคัดกรองหรือส่งกลับไป
-    # หากเว็บมีรูปแบบเฉพาะ สามารถเขียนโค้ดตัดคำ (Parsing) เพิ่มตรงนี้ได้ครับ
-    return {
-        "top": "กำลังดึงข้อมูล...",
-        "bottom": "กำลังดึงข้อมูล...",
-        "raw": page_text,
-    }
+    if extracted_lines:
+      # รวมข้อความผลลัพธ์ที่พบ
+      result_detail = "\n".join(extracted_lines[:3])
+      return (
+          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+          f"📅 ประจำวันที่: {get_thai_date()}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"{result_detail}\n"
+          f"━━━━━━━━━━━━━━━"
+      )
+
+    return (
+        f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+        f"📅 ประจำวันที่: {get_thai_date()}\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"❌ ยังไม่พบข้อมูลผลรางวัลของ '{lottery_name}' จากเว็บไซต์ในขณะนี้"
+    )
 
   except Exception as e:
-    print(f"❌ Error fetching web: {e}")
-    return None
+    print(f"❌ Error during web scraping: {e}")
+    if driver:
+      try:
+        driver.quit()
+      except Exception:
+        pass
+    return (
+        f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+        f"📅 ประจำวันที่: {get_thai_date()}\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"❌ เกิดข้อผิดพลาดในการดึงข้อมูลจากเว็บไซต์: {e}"
+    )
 
 
 # --- 2. ฟังก์ชันสร้างข้อความแนวทางหวย ---
@@ -118,7 +152,7 @@ def generate_lottery_message(lottery_name="แนวทางหวย"):
 # --- Webhook & API Routes ---
 @app.route("/", methods=["GET"])
 def home():
-  return "Line Bot ใบดำนำโชค (Auto Scraping) is running!", 200
+  return "Line Bot ใบดำนำโชค (Auto Scraping with Chromium) is running!", 200
 
 
 @app.route("/callback", methods=["POST"])
@@ -157,7 +191,7 @@ def handle_message(event):
       )
     return
 
-  # 2. ตรวจผลหวย: พิมพ์ "ผลหวยฮานอย" หรือ "ตรวจหวยนิเคอิ" -> ให้บอทวิ่งไปดึงจากเว็บอัตโนมัติ
+  # 2. ตรวจผลหวยอัตโนมัติจากเว็บ: พิมพ์ "ผลหวยนิเคอิ" หรือ "ตรวจหวยนิเคอิ VIP"
   if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
     lottery_name = (
         user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
@@ -167,49 +201,17 @@ def handle_message(event):
           event.reply_token,
           TextSendMessage(
               text=(
-                  "กรุณาระบุชื่อหวยด้วยครับ\nเช่น 'ผลหวยฮานอย' หรือ 'ผลหวยนิเคอิ'"
+                  "กรุณาระบุชื่อหวยด้วยครับ\nเช่น 'ผลหวยนิเคอิ' หรือ"
+                  " 'ผลหวยฮานอย'"
               )
           ),
       )
       return
 
-    # แจ้งเตือนสถานะกำลังดึงข้อมูล
+    # ดึงข้อมูลจริงจากเว็บเป้าหมายด้วย Chromium
+    result_text = fetch_lottery_result_from_web(lottery_name)
     line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(
-            text=(
-                f"⏳ กำลังดึงผลรางวัล '{lottery_name}'"
-                " จากเว็บไซต์อัตโนมัติ..."
-            )
-        ),
-    )
-
-    # เรียกใช้ฟังก์ชันดึงข้อมูลจากเว็บ
-    web_data = fetch_lottery_result_from_web(lottery_name)
-
-    if web_data:
-      result_text = (
-          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
-          f"📅 ประจำวันที่: {get_thai_date()}\n"
-          f"━━━━━━━━━━━━━━━\n"
-          f"สามตัวบน: {web_data['top']}\n"
-          f"สองตัวล่าง: {web_data['bottom']}\n"
-          f"━━━━━━━━━━━━━━━\n"
-          f"(ดึงข้อมูลจากเว็บไซต์อัตโนมัติสำเร็จ)"
-      )
-    else:
-      result_text = (
-          f"❌ ไม่สามารถดึงข้อมูลผลรางวัล '{lottery_name}' จากเว็บไซต์ได้ในขณะนี้"
-      )
-
-    # ส่งผลลัพธ์กลับเข้าแชท
-    target_id = (
-        event.source.group_id
-        if event.source.type == "group"
-        else event.source.user_id
-    )
-    line_bot_api.push_message(
-        target_id, messages=TextSendMessage(text=result_text)
+        event.reply_token, TextSendMessage(text=result_text)
     )
     return
 
