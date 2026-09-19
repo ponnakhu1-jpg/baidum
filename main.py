@@ -44,7 +44,7 @@ def get_thai_date():
   return f"{now.day} {thai_months[now.month]} {now.year + 543}"
 
 
-# --- ฟังก์ชันดึงผลหวยแบบยืดหยุ่น ค้นหาคำหลักและตัวเลข ---
+# --- ฟังก์ชันดึงผลหวย ---
 def fetch_jaywaijing_result(lottery_name):
   try:
     target_url = "https://jaywaijing.co/home"
@@ -52,17 +52,13 @@ def fetch_jaywaijing_result(lottery_name):
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7",
+        )
     }
-
-    response = requests.get(target_url, headers=headers, timeout=15)
+    response = requests.get(target_url, headers=headers, timeout=10)
     if response.status_code != 200:
       return None
 
     soup = BeautifulSoup(response.text, "html.parser")
-
-    # ทำความสะอาดคำค้นหา ตัดคำว่า VIP และวงเล็บออก แล้วแยกคำ
     clean_name = (
         lottery_name.replace("VIP", "")
         .replace("(", " ")
@@ -74,18 +70,14 @@ def fetch_jaywaijing_result(lottery_name):
     if not keywords:
       keywords = [lottery_name]
 
-    # ค้นหาในทุกบล็อก HTML (div, tr, li, p, span, td)
     candidates = []
     for tag in soup.find_all(["div", "tr", "li", "p", "span", "td"]):
       text = tag.get_text(" ", strip=True)
-      # ตรวจสอบว่ามีคำค้นหาครบทุกคำไหม (เช่น มีทั้ง "นิเคอิ" และ "เช้า")
       if all(kw in text for kw in keywords):
-        # ต้องมีตัวเลขปนอยู่ด้วย เพราะคือผลรางวัล
         if any(char.isdigit() for char in text):
-          if len(text) < 180:  # กรองข้อความที่ไม่ยาวเกินไป
+          if len(text) < 180:
             candidates.append(text)
 
-    # กรองข้อความที่ไม่ซ้ำกัน
     unique_candidates = []
     for c in candidates:
       if c not in unique_candidates:
@@ -120,7 +112,7 @@ def callback():
 def handle_message(event):
   user_msg = event.message.text.strip()
 
-  # ตรวจผลหวย
+  # 1. จัดการคำสั่งตรวจผลหวย
   if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
     lottery_name = (
         user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
@@ -155,7 +147,7 @@ def handle_message(event):
     )
     return
 
-  # ขอแนวทาง
+  # 2. จัดการคำสั่งขอแนวทาง (ให้กลับมาทำงานปกติทันที)
   if user_msg.startswith("ขอแนวทาง") or user_msg in ["แนวทาง", "แนวทางหวย"]:
     l_name = user_msg.replace("ขอแนวทาง", "").strip() or "หวยประจำวัน"
     root_numbers = random.sample(range(0, 10), 2)
