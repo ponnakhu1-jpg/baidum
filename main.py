@@ -1,7 +1,7 @@
 import os
 import random
-import requests  # ใช้ดึงข้อมูลเว็บแบบเบาสบาย
-from bs4 import BeautifulSoup  # ใช้แกะข้อความใน HTML
+import requests
+from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
 from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
@@ -28,6 +28,9 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 # กำหนดโซนเวลาประเทศไทย (UTC+7)
 bkk_tz = timezone(timedelta(hours=7))
 
+# 🗄️ ฐานข้อมูลสำรองในหน่วยความจำ สำหรับระบบ "เซ็ตผล"
+manual_results_db = {}
+
 
 # --- ฟังก์ชันแปลงวันที่เป็นภาษาไทย ---
 def get_thai_date():
@@ -53,7 +56,7 @@ def get_thai_date():
   return f"{day} {month} {year}"
 
 
-# --- 1. ฟังก์ชันดึงผลหวยด้วย Requests + BeautifulSoup (เร็วและไม่ใช้ Chrome) ---
+# --- 1. ฟังก์ชันดึงผลหวยจากเว็บเป้าหมาย ---
 def fetch_lottery_result_from_web(lottery_name):
   try:
     target_url = "https://xn--t3cmiit.com/stock-lottery#vip"
@@ -66,52 +69,31 @@ def fetch_lottery_result_from_web(lottery_name):
 
     response = requests.get(target_url, headers=headers, timeout=10)
     if response.status_code != 200:
-      return (
-          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
-          f"📅 ประจำวันที่: {get_thai_date()}\n"
-          f"━━━━━━━━━━━━━━━\n"
-          f"❌ ไม่สามารถเชื่อมต่อกับเว็บไซต์เป้าหมายได้"
-      )
+      return None
 
-    # แกะข้อความด้วย BeautifulSoup
     soup = BeautifulSoup(response.text, "html.parser")
     page_text = soup.get_text()
 
     extracted_lines = []
     for line in page_text.split("\n"):
       cleaned_line = line.strip()
-      if cleaned_line and lottery_name in cleaned_line:
+      # ค้นหาคำที่เกี่ยวข้องแบบยืดหยุ่น
+      if cleaned_line and any(
+          kw in cleaned_line for kw in lottery_name.split()
+      ):
         extracted_lines.append(cleaned_line)
 
     if extracted_lines:
-      result_detail = "\n".join(extracted_lines[:3])
-      return (
-          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
-          f"📅 ประจำวันที่: {get_thai_date()}\n"
-          f"━━━━━━━━━━━━━━━\n"
-          f"{result_detail}\n"
-          f"━━━━━━━━━━━━━━━"
-      )
+      return "\n".join(extracted_lines[:3])
 
-    return (
-        f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
-        f"📅 ประจำวันที่: {get_thai_date()}\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"❌ ยังไม่พบข้อมูลผลรางวัลของ '{lottery_name}' จากเว็บไซต์ในขณะนี้"
-    )
-
+    return None
   except Exception as e:
-    print(f"❌ Error during scraping: {e}")
-    return (
-        f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
-        f"📅 ประจำวันที่: {get_thai_date()}\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"❌ เกิดข้อผิดพลาดในการดึงข้อมูล: {e}"
-    )
+    print(f"❌ Error scraping web: {e}")
+    return None
 
 
 # --- 2. ฟังก์ชันสร้างข้อความแนวทางหวย ---
-def generate_lottery_message(lottery_name="แนวทางหวย"):
+def generate_lottery_message(lottery_name="หวยประจำวัน"):
   root_numbers = random.sample(range(0, 10), 2)
   spot_numbers = random.sample(range(0, 100), 10)
   sets = random.sample(range(0, 1000), 6)
@@ -129,7 +111,7 @@ def generate_lottery_message(lottery_name="แนวทางหวย"):
 # --- Webhook & API Routes ---
 @app.route("/", methods=["GET"])
 def home():
-  return "Line Bot ใบดำนำโชค (Requests Engine) is running smoothly!", 200
+  return "Line Bot ใบดำนำโชค (Hybrid Auto & Manual) is running smoothly!", 200
 
 
 @app.route("/callback", methods=["POST"])
@@ -153,7 +135,7 @@ def handle_message(event):
   if event.source.type == "group":
     print(f"📌 Group ID ปัจจุบันคือ: {event.source.group_id}")
 
-  # 1. ขอไอดีกลุ่ม
+  # 1. คำสั่งขอไอดีกลุ่ม
   if user_msg == "ขอไอดีกลุ่ม":
     if event.source.type == "group":
       group_id = event.source.group_id
@@ -168,7 +150,42 @@ def handle_message(event):
       )
     return
 
-  # 2. ตรวจผลหวยอัตโนมัติจากเว็บ
+  # 2. คำสั่งแอดมิน: "เซ็ตผล นิเคอิบ่าย VIP 123 45"
+  if user_msg.startswith("เซ็ตผล"):
+    parts = user_msg.split()
+    if len(parts) >= 4:
+      lottery_name = " ".join(parts[1:-2])
+      top_num = parts[-2]
+      bottom_num = parts[-1]
+
+      manual_results_db[lottery_name] = {
+          "top": top_num,
+          "bottom": bottom_num,
+          "date": get_thai_date(),
+      }
+
+      line_bot_api.reply_message(
+          event.reply_token,
+          TextSendMessage(
+              text=(
+                  f"✅ บันทึกผลสำเร็จ!\nหวย: {lottery_name}\nสามตัวบน:"
+                  f" {top_num}\nสองตัวล่าง: {bottom_num}"
+              )
+          ),
+      )
+    else:
+      line_bot_api.reply_message(
+          event.reply_token,
+          TextSendMessage(
+              text=(
+                  "รูปแบบคำสั่งไม่ถูกต้อง\nกรุณาใช้: เซ็ตผล [ชื่อหวย] [3ตัวบน]"
+                  " [2ตัวล่าง]"
+              )
+          ),
+      )
+    return
+
+  # 3. ตรวจผลหวย: พิมพ์ "ผลหวยนิเคอิบ่าย VIP" หรือ "ตรวจหวยนิเคอิ"
   if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
     lottery_name = (
         user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
@@ -178,20 +195,53 @@ def handle_message(event):
           event.reply_token,
           TextSendMessage(
               text=(
-                  "กรุณาระบุชื่อหวยด้วยครับ\nเช่น 'ผลหวยนิเคอิ' หรือ"
-                  " 'ผลหวยฮานอย'"
+                  "กรุณาระบุชื่อหวยด้วยครับ\nเช่น 'ผลหวยนิเคอิบ่าย VIP'"
+                  " หรือ 'ผลหวยฮานอย'"
               )
           ),
       )
       return
 
-    result_text = fetch_lottery_result_from_web(lottery_name)
+    # ขั้นที่ A: พยายามดึงจากเว็บไซต์อัตโนมัติก่อน
+    web_result = fetch_lottery_result_from_web(lottery_name)
+
+    if web_result:
+      result_text = (
+          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+          f"📅 ประจำวันที่: {get_thai_date()}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"{web_result}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"(ดึงข้อมูลจากเว็บไซต์อัตโนมัติ)"
+      )
+    elif lottery_name in manual_results_db:
+      # ขั้นที่ B: ถ้าเว็บไม่เจอ ให้ดึงจากข้อมูลสำรองที่เซ็ตไว้
+      data = manual_results_db[lottery_name]
+      result_text = (
+          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+          f"📅 ประจำวันที่: {data['date']}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"สามตัวบน: {data['top']}\n"
+          f"สองตัวล่าง: {data['bottom']}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"(ข้อมูลจากระบบบันทึกสำรอง)"
+      )
+    else:
+      # ขั้นที่ C: ถ้าไม่มีทั้งในเว็บและในระบบสำรอง
+      result_text = (
+          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+          f"📅 ประจำวันที่: {get_thai_date()}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"❌ ยังไม่พบข้อมูลผลรางวัลของ '{lottery_name}' ในขณะนี้\n"
+          f"(แอดมินสามารถพิมพ์ 'เซ็ตผล {lottery_name} [3ตัว] [2ตัว]' เพื่อสำรองผลได้)"
+      )
+
     line_bot_api.reply_message(
         event.reply_token, TextSendMessage(text=result_text)
     )
     return
 
-  # 3. ขอแนวทาง
+  # 4. ขอแนวทาง
   if user_msg.startswith("ขอแนวทาง") or user_msg in ["แนวทาง", "แนวทางหวย"]:
     lottery_name = user_msg.replace("ขอแนวทาง", "").strip()
     if not lottery_name or lottery_name in ["แนวทาง", "แนวทางหวย"]:
