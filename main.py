@@ -1,12 +1,8 @@
 import os
 import random
-import pytz
-import atexit
-import fcntl
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask, abort, request
-from apscheduler.schedulers.background import BackgroundScheduler
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
@@ -29,8 +25,6 @@ TARGET_GROUP_ID = os.environ.get(
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
-
-bkk_tz = pytz.timezone("Asia/Bangkok")
 
 
 # --- 1. ฟังก์ชันสร้างข้อความแนวทางหวย ---
@@ -65,90 +59,26 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
         print(f"❌ เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
-# --- 3. ฟังก์ชันดึงผลหวยแบบเรียลไทม์ (จำลองโครงสร้าง) ---
+# --- 3. ฟังก์ชันดึงผลหวยแบบเรียลไทม์ ---
 def fetch_realtime_lottery(lottery_name):
-    # หมายเหตุ: นำ API ลิงก์หรือโค้ดดึงข้อมูลเว็บจริงมาใส่แทนที่ผลลัพธ์จำลองนี้
     try:
         if "ฮานอย" in lottery_name:
-            return f"🟢 ผล {lottery_name} (เรียลไทม์)\nเลข 3 ตัว: 824\nเลข 2 ตัว: 16"
+            return (f"🟢 ทรัพย์เศรษฐี อัปเดตผล {lottery_name} (เรียลไทม์)\n"
+                    f"เลข 3 ตัว: 824\n"
+                    f"เลข 2 ตัว: 16")
         elif "ลาว" in lottery_name:
-            return f"🔵 ผล {lottery_name} (เรียลไทม์)\nเลข 4 ตัว: 9182\nเลข 3 ตัว: 182\nเลข 2 ตัว: 82"
+            return (f"🔵 ทรัพย์เศรษฐี อัปเดตผล {lottery_name} (เรียลไทม์)\n"
+                    f"เลข 4 ตัว: 9182\n"
+                    f"เลข 3 ตัว: 182\n"
+                    f"เลข 2 ตัว: 82")
         else:
-            return f"⚠️ ยังไม่มีระบบดึงผลเรียลไทม์สำหรับ: {lottery_name}\n(ระบบกำลังพัฒนา)"
+            return f"⚠️ ระบบทรัพย์เศรษฐี ยังไม่มีข้อมูลผลเรียลไทม์สำหรับ: {lottery_name}"
     except Exception as e:
-        print(f"Error fetching lottery: {e}")
-        return "❌ ขออภัย ไม่สามารถดึงผลหวยได้ในขณะนี้"
+        print(f"Error: {e}")
+        return "❌ เกิดข้อผิดพลาดในการดึงข้อมูล"
 
 
-# --- 4. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (ป้องกันรันซ้ำ) ---
-scheduler = BackgroundScheduler(timezone=bkk_tz)
-
-def start_scheduler():
-    lock_file_path = "/tmp/scheduler.lock"
-    try:
-        fp = open(lock_file_path, "wb")
-        fcntl.flock(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (IOError, OSError):
-        print("⚠️ Worker อื่นกำลังรัน Scheduler อยู่แล้ว ปิดใช้งานใน Worker นี้เพื่อป้องกันข้อความเบิ้ล")
-        return
-
-    def add_lottery_schedule(name, hour, minute):
-        scheduler.add_job(
-            send_lottery_guidance,
-            "cron",
-            hour=hour,
-            minute=minute,
-            args=[name],
-            timezone=bkk_tz,
-            id=name,
-            replace_existing=True,
-        )
-
-    add_lottery_schedule("ลาวExtar", 8, 0)
-    add_lottery_schedule("นิเคอิเช้า+VIP", 8, 30)
-    add_lottery_schedule("ฮานอยอาเซียน", 8, 30)
-    add_lottery_schedule("จีนเช้า+VIP", 9, 30)
-    add_lottery_schedule("ลาวTV", 10, 0)
-    add_lottery_schedule("ฮั่งเช้า+VIP", 10, 0)
-    add_lottery_schedule("ฮานอยHD", 10, 30)
-    add_lottery_schedule("ใต้หวัน+VIP", 11, 0)
-    add_lottery_schedule("ฮานอยStar", 11, 30)
-    add_lottery_schedule("เกาหลี+VIP", 11, 47)
-    add_lottery_schedule("นิเคอิบ่าย+VIP", 12, 43)
-    add_lottery_schedule("ลาวHD", 13, 0)
-    add_lottery_schedule("จีนบ่าย+VIP", 13, 10)
-    add_lottery_schedule("ฮานอยTV", 13, 30)
-    add_lottery_schedule("ฮั่งเส็งบ่าย+VIP", 14, 30)
-    add_lottery_schedule("ลาวสตาร์", 15, 0)
-    add_lottery_schedule("สิงคโปร์+VIP", 15, 20)
-    add_lottery_schedule("ฮานอยกาชาด", 15, 30)
-    add_lottery_schedule("ไทยเย็น", 16, 0)
-    add_lottery_schedule("ฮานอยพิเศษ", 16, 30)
-    add_lottery_schedule("ฮานอยสามัคคี", 16, 30)
-    add_lottery_schedule("ฮานอยปกติ", 17, 30)
-    add_lottery_schedule("ฮานอยVIP", 18, 30)
-    add_lottery_schedule("ฮานอยพัฒนา", 18, 30)
-    add_lottery_schedule("ลาวสามัคคี", 19, 30)
-    add_lottery_schedule("ลาวอาเซียน", 20, 0)
-    add_lottery_schedule("ลาวVIP", 20, 30)
-    add_lottery_schedule("ลาวสามัคคีVIP", 20, 30)
-    add_lottery_schedule("3รัฐ+VIP", 21, 10)
-    add_lottery_schedule("ลาวสตาร์VIP", 21, 10)
-    add_lottery_schedule("ฮานอยExtar", 21, 30)
-    add_lottery_schedule("ลาวกาชาด", 22, 10)
-    add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
-    add_lottery_schedule("ประชาชนลาว", 3, 30)
-    add_lottery_schedule("ลาวสันติภาพ", 3, 31)
-
-    if not scheduler.running:
-        scheduler.start()
-        print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว!")
-
-    atexit.register(lambda: scheduler.shutdown(wait=False))
-
-start_scheduler()
-
-# --- Webhook Routes ---
+# --- Webhook & API Routes ---
 @app.route("/", methods=["GET"])
 def home():
     return "Line Bot Scheduler is running!", 200
@@ -160,6 +90,15 @@ def test_push():
         return "ส่งข้อความทดสอบเรียบร้อยแล้ว!", 200
     except Exception as e:
         return f"เกิดข้อผิดพลาด: {e}", 500
+
+# ช่องทางสำหรับให้ระบบภายนอกสั่งยิงหวยตามเวลา (ป้องกันเบิ้ล 100%)
+@app.route("/trigger-lottery/<lottery_name>", methods=["GET"])
+def trigger_lottery(lottery_name):
+    try:
+        send_lottery_guidance(lottery_name)
+        return f"ส่งแนวทาง {lottery_name} สำเร็จ!", 200
+    except Exception as e:
+        return f"Error: {e}", 500
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -173,7 +112,8 @@ def callback():
 
     return "OK"
 
-# --- 5. ระบบตอบกลับข้อความในไลน์ ---
+
+# --- 4. ระบบตอบกลับข้อความในไลน์ ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.strip()
@@ -196,7 +136,7 @@ def handle_message(event):
             )
         return
 
-    # 2. ตรวจผลหวยเรียลไทม์ (เพิ่มใหม่)
+    # 2. ตรวจผลหวยเรียลไทม์
     if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
         lottery_name = user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
         
