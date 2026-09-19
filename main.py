@@ -59,23 +59,45 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
         print(f"❌ เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
-# --- 3. ฟังก์ชันดึงผลหวยแบบเรียลไทม์ ---
+# --- 3. ฟังก์ชันดึงผลหวยแบบเรียลไทม์จากเว็บเป้าหมาย ---
 def fetch_realtime_lottery(lottery_name):
     try:
-        if "ฮานอย" in lottery_name:
-            return (f"🟢 ทรัพย์เศรษฐี อัปเดตผล {lottery_name} (เรียลไทม์)\n"
-                    f"เลข 3 ตัว: 824\n"
-                    f"เลข 2 ตัว: 16")
-        elif "ลาว" in lottery_name:
-            return (f"🔵 ทรัพย์เศรษฐี อัปเดตผล {lottery_name} (เรียลไทม์)\n"
-                    f"เลข 4 ตัว: 9182\n"
-                    f"เลข 3 ตัว: 182\n"
-                    f"เลข 2 ตัว: 82")
+        url = "https://xn--t3cmiit.com/stock-lottery#vip"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.encoding = 'utf-8'
+
+        if response.status_code != 200:
+            return "❌ ไม่สามารถเชื่อมต่อกับเว็บไซต์ผลหวยได้ในขณะนี้"
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # ค้นหาข้อมูลจากหน้าเว็บ (ดึงข้อมูลภาพรวมเบื้องต้นหรือชื่อหวยที่ตรงกัน)
+        # หมายเหตุ: โค้ดส่วนนี้จะทำการดึงลิงก์หรือข้อความจากเว็บเป้าหมายมาแสดงผล
+        found_data = []
+        for item in soup.find_all(['div', 'tr', 'li']):
+            text = item.get_text()
+            if lottery_name in text:
+                # ตัดข้อความให้กระชับเพื่อนำมาแสดงในไลน์
+                clean_text = " ".join(text.split())
+                if len(clean_text) < 150: # กรองเฉพาะบรรทัดที่เกี่ยวข้อง
+                    found_data.append(clean_text)
+
+        if found_data:
+            # เลือกผลลัพธ์ที่ตรงที่สุดมาแสดง
+            result_str = "\n".join(found_data[:2])
+            return f"🟢 ทรัพย์เศรษฐี ผล {lottery_name} (เรียลไทม์):\n{result_str}"
         else:
-            return f"⚠️ ระบบทรัพย์เศรษฐี ยังไม่มีข้อมูลผลเรียลไทม์สำหรับ: {lottery_name}"
+            # ถ้ายังหาคีย์เวิร์ดไม่พบในทันที ให้แสดงลิงก์แหล่งอ้างอิงสำรองให้ลูกค้ากดตรวจสอบเองได้
+            return (f"🟢 ทรัพย์เศรษฐี อัปเดตผล {lottery_name}\n"
+                    f"ตรวจสอบผลรางวัลฉบับเต็มได้ที่:\n{url}")
+
     except Exception as e:
-        print(f"Error: {e}")
-        return "❌ เกิดข้อผิดพลาดในการดึงข้อมูล"
+        print(f"Error scraping: {e}")
+        return f"🟢 ทรัพย์เศรษฐี อัปเดตผล {lottery_name}\nตรวจสอบผลรางวัลได้ที่: https://xn--t3cmiit.com/stock-lottery#vip"
 
 
 # --- Webhook & API Routes ---
@@ -91,7 +113,6 @@ def test_push():
     except Exception as e:
         return f"เกิดข้อผิดพลาด: {e}", 500
 
-# ช่องทางสำหรับให้ระบบภายนอกสั่งยิงหวยตามเวลา (ป้องกันเบิ้ล 100%)
 @app.route("/trigger-lottery/<lottery_name>", methods=["GET"])
 def trigger_lottery(lottery_name):
     try:
@@ -143,7 +164,7 @@ def handle_message(event):
         if not lottery_name:
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="กรุณาระบุชื่อหวยที่ต้องการตรวจด้วยครับ\nเช่น 'ผลหวยฮานอย' หรือ 'ผลหวยลาว'")
+                TextSendMessage(text="กรุณาระบุชื่อหวยที่ต้องการตรวจด้วยครับ\nเช่น 'ผลหวยฮานอย' หรือ 'ผลนิเคอิ'")
             )
             return
             
