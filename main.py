@@ -1,7 +1,10 @@
+import atexit
+import fcntl
 import os
 import random
 import pytz
 import requests
+from apscheduler.schedulers.background import BackgroundScheduler
 from bs4 import BeautifulSoup
 from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
@@ -80,10 +83,85 @@ def fetch_realtime_lottery(lottery_name):
     return "❌ ขออภัย ไม่สามารถดึงผลหวยได้ในขณะนี้"
 
 
+# --- 4. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (พร้อมระบบป้องกันเบิ้ล) ---
+scheduler = BackgroundScheduler(timezone=bkk_tz)
+
+
+def start_scheduler():
+  lock_file_path = "/tmp/lottery_scheduler.lock"
+  try:
+    fp = open(lock_file_path, "wb")
+    fcntl.flock(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+  except (IOError, OSError):
+    print(
+        "⚠️ Worker อื่นกำลังรัน Scheduler อยู่แล้ว ปิดใช้งานใน Worker"
+        " นี้เพื่อป้องกันข้อความเบิ้ล"
+    )
+    return
+
+  def add_lottery_schedule(name, hour, minute):
+    scheduler.add_job(
+        send_lottery_guidance,
+        "cron",
+        hour=hour,
+        minute=minute,
+        args=[name],
+        timezone=bkk_tz,
+        id=name,
+        replace_existing=True,
+    )
+
+  # ใส่ตารางเวลาที่คุณต้องการทั้งหมดครบถ้วน
+  add_lottery_schedule("ลาวExtar", 8, 0)
+  add_lottery_schedule("นิเคอิเช้า+VIP", 8, 30)
+  add_lottery_schedule("ฮานอยอาเซียน", 8, 30)
+  add_lottery_schedule("จีนเช้า+VIP", 9, 30)
+  add_lottery_schedule("ลาวTV", 10, 0)
+  add_lottery_schedule("ฮั่งเช้า+VIP", 10, 0)
+  add_lottery_schedule("ฮานอยHD", 10, 30)
+  add_lottery_schedule("ใต้หวัน+VIP", 11, 0)
+  add_lottery_schedule("ฮานอยStar", 11, 30)
+  add_lottery_schedule("เกาหลี+VIP", 11, 47)
+  add_lottery_schedule("นิเคอิบ่าย+VIP", 12, 43)
+  add_lottery_schedule("ลาวHD", 13, 0)
+  add_lottery_schedule("จีนบ่าย+VIP", 13, 10)
+  add_lottery_schedule("ฮานอยTV", 13, 30)
+  add_lottery_schedule("ฮั่งเส็งบ่าย+VIP", 14, 30)
+  add_lottery_schedule("ลาวสตาร์", 15, 0)
+  add_lottery_schedule("สิงคโปร์+VIP", 15, 20)
+  add_lottery_schedule("ฮานอยกาชาด", 15, 30)
+  add_lottery_schedule("ไทยเย็น", 16, 0)
+  add_lottery_schedule("ฮานอยพิเศษ", 16, 30)
+  add_lottery_schedule("ฮานอยสามัคคี", 16, 30)
+  add_lottery_schedule("ฮานอยปกติ", 17, 30)
+  add_lottery_schedule("ฮานอยVIP", 18, 30)
+  add_lottery_schedule("ฮานอยพัฒนา", 18, 30)
+  add_lottery_schedule("ลาวสามัคคี", 19, 30)
+  add_lottery_schedule("ลาวอาเซียน", 20, 0)
+  add_lottery_schedule("ลาวVIP", 20, 30)
+  add_lottery_schedule("ลาวสามัคคีVIP", 20, 30)
+  add_lottery_schedule("3รัฐ+VIP", 21, 10)
+  add_lottery_schedule("ลาวสตาร์VIP", 21, 10)
+  add_lottery_schedule("ฮานอยExtar", 21, 30)
+  add_lottery_schedule("ลาวกาชาด", 22, 10)
+  add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
+  add_lottery_schedule("ประชาชนลาว", 3, 30)
+  add_lottery_schedule("ลาวสันติภาพ", 3, 31)
+
+  if not scheduler.running:
+    scheduler.start()
+    print("📌 Scheduler เริ่มทำงานพร้อมตารางเวลาครบถ้วนแล้ว!")
+
+  atexit.register(lambda: scheduler.shutdown(wait=False))
+
+
+start_scheduler()
+
+
 # --- Webhook Routes ---
 @app.route("/", methods=["GET"])
 def home():
-  return "Line Bot Webhook is running!", 200
+  return "Line Bot Scheduler is running!", 200
 
 
 @app.route("/test-push", methods=["GET"])
@@ -91,17 +169,6 @@ def test_push():
   try:
     send_lottery_guidance("ทดสอบระบบส่งอัตโนมัติ")
     return "ส่งข้อความทดสอบเรียบร้อยแล้ว!", 200
-  except Exception as e:
-    return f"เกิดข้อผิดพลาด: {e}", 500
-
-
-# --- Endpoint สำหรับให้ระบบตั้งเวลาภายนอกมากดสั่งส่ง (ป้องกันการส่งเบิ้ล 100%) ---
-@app.route("/cron-send/<lottery_name>", methods=["GET", "POST"])
-def cron_send(lottery_name):
-  try:
-    # แปลงชื่อหวยจาก URL (เช่น นิเคอิเช้า)
-    send_lottery_guidance(lottery_name)
-    return f"ส่งแนวทาง [{lottery_name}] สำเร็จ!", 200
   except Exception as e:
     return f"เกิดข้อผิดพลาด: {e}", 500
 
