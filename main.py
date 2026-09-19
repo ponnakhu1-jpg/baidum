@@ -44,10 +44,10 @@ def get_thai_date():
   return f"{now.day} {thai_months[now.month]} {now.year + 543}"
 
 
-# --- ฟังก์ชันดึงผลหวยจากเว็บไซต์ mongkolchoke ---
-def fetch_mongkolchoke_result(lottery_name):
+# --- ฟังก์ชันดึงผลหวยจากเว็บไซต์ jaywaijing.co/home ---
+def fetch_jaywaijing_result(lottery_name):
   try:
-    target_url = "https://www.mongkolchoke.com/user/"
+    target_url = "https://jaywaijing.co/home"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -60,22 +60,19 @@ def fetch_mongkolchoke_result(lottery_name):
       return None
 
     soup = BeautifulSoup(response.text, "html.parser")
-
-    # ค้นหาข้อมูลจากตาราง (Table) หรือแถวข้อมูลในหน้าเว็บ
     results_found = []
 
-    # ลองหาจาก tag ตารางหรือบล็อกข้อความที่มีชื่อหวย
+    # ทำความสะอาดคำค้นหา
     search_keywords = lottery_name.replace("VIP", "").strip().split()
 
-    # กวาดข้อความจากทุกๆ row ในตารางหรือ tag ทั่วไป
-    for row in soup.find_all(["tr", "div", "li", "p"]):
-      row_text = row.get_text(separator=" ", strip=True)
-      if row_text and all(kw in row_text for kw in search_keywords):
-        # กรองเอาเฉพาะบรรทัดที่ไม่ยาวจนเกินไปและมีความเกี่ยวข้อง
-        if len(row_text) < 150:
-          results_found.append(row_text)
+    # กวาดข้อมูลจากตารางหรือบล็อกข้อความบนหน้าเว็บ
+    for element in soup.find_all(["tr", "div", "li", "p", "span"]):
+      element_text = element.get_text(separator=" ", strip=True)
+      if element_text and all(kw in element_text for kw in search_keywords):
+        if len(element_text) < 150:
+          results_found.append(element_text)
 
-    # หากไม่เจอจากตาราง ให้ลองค้นหาจากข้อความทั้งหมดในหน้า
+    # หากไม่เจอ ให้ค้นหาจากข้อความทั้งหมดในหน้า
     if not results_found:
       page_text = soup.get_text()
       for line in page_text.split("\n"):
@@ -83,7 +80,7 @@ def fetch_mongkolchoke_result(lottery_name):
         if cleaned and all(kw in cleaned for kw in search_keywords):
           results_found.append(cleaned)
 
-    # ตัดข้อความซ้ำ
+    # กรองข้อความซ้ำ
     unique_results = []
     for r in results_found:
       if r not in unique_results:
@@ -94,13 +91,13 @@ def fetch_mongkolchoke_result(lottery_name):
 
     return None
   except Exception as e:
-    print(f"❌ Error fetching mongkolchoke: {e}")
+    print(f"❌ Error fetching jaywaijing: {e}")
     return None
 
 
 @app.route("/", methods=["GET"])
 def home():
-  return "Line Bot Mongkolchoke Parser is running!", 200
+  return "Line Bot Jaywaijing Parser is running!", 200
 
 
 @app.route("/callback", methods=["POST"])
@@ -130,7 +127,7 @@ def handle_message(event):
       )
       return
 
-    web_result = fetch_mongkolchoke_result(lottery_name)
+    web_result = fetch_jaywaijing_result(lottery_name)
 
     if web_result:
       result_text = (
