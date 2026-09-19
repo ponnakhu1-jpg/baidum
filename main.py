@@ -14,11 +14,11 @@ app = Flask(__name__)
 # --- ดึงค่า คีย์และ ID จาก Environment Variables ---
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get(
     "LINE_CHANNEL_ACCESS_TOKEN",
-    "l7iMS9gakB9hsgqoDqlUyzqWYhnVJbHQj19VYUO47gr0qcFier1UsX19Ft9SxUk8hGlQinbpaQrXjNbIS0H6g54I5Js/yW8gpi3k5u/rNdCKsIvIQg6noqrUx+J66bnteLI7K8EW5Ax8YrqZawZ/HAdB04t89/1O/w1cDnyilFU=="
+    "cz7mbCkSVue+kpm1SBJaKYTH/N46GW6Sb2FPeAlscS4/1IKocUi3zzCV9/yEegd2hGlQinbpaQrXjNbIS0H6g54I5Js/yW8gpi3k5u/rNdB3KdEkC54yP6O3thH9dMlQuxgE5UAXEKqPxeFYTSMMaAdB04t89/1O/w1cDnyilFU="
 )
 LINE_CHANNEL_SECRET = os.environ.get(
     "LINE_CHANNEL_SECRET", 
-    "266817472f62731ff868dc16a955f40f"
+    "0226033a68e6e71291c4b8bb3bb9a8c7"
 )
 TARGET_GROUP_ID = os.environ.get(
     "TARGET_GROUP_ID", 
