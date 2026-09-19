@@ -44,15 +44,16 @@ def get_thai_date():
   return f"{now.day} {thai_months[now.month]} {now.year + 543}"
 
 
-# --- ฟังก์ชันดึงผลหวยจากเว็บไซต์ jaywaijing.co/home ---
+# --- ฟังก์ชันดึงผลหวยแบบยืดหยุ่น ค้นหาคำหลักและตัวเลข ---
 def fetch_jaywaijing_result(lottery_name):
   try:
     target_url = "https://jaywaijing.co/home"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
+            " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7",
     }
 
     response = requests.get(target_url, headers=headers, timeout=15)
@@ -60,44 +61,48 @@ def fetch_jaywaijing_result(lottery_name):
       return None
 
     soup = BeautifulSoup(response.text, "html.parser")
-    results_found = []
 
-    # ทำความสะอาดคำค้นหา
-    search_keywords = lottery_name.replace("VIP", "").strip().split()
+    # ทำความสะอาดคำค้นหา ตัดคำว่า VIP และวงเล็บออก แล้วแยกคำ
+    clean_name = (
+        lottery_name.replace("VIP", "")
+        .replace("(", " ")
+        .replace(")", " ")
+        .strip()
+    )
+    keywords = [kw for kw in clean_name.split() if kw]
 
-    # กวาดข้อมูลจากตารางหรือบล็อกข้อความบนหน้าเว็บ
-    for element in soup.find_all(["tr", "div", "li", "p", "span"]):
-      element_text = element.get_text(separator=" ", strip=True)
-      if element_text and all(kw in element_text for kw in search_keywords):
-        if len(element_text) < 150:
-          results_found.append(element_text)
+    if not keywords:
+      keywords = [lottery_name]
 
-    # หากไม่เจอ ให้ค้นหาจากข้อความทั้งหมดในหน้า
-    if not results_found:
-      page_text = soup.get_text()
-      for line in page_text.split("\n"):
-        cleaned = line.strip()
-        if cleaned and all(kw in cleaned for kw in search_keywords):
-          results_found.append(cleaned)
+    # ค้นหาในทุกบล็อก HTML (div, tr, li, p, span, td)
+    candidates = []
+    for tag in soup.find_all(["div", "tr", "li", "p", "span", "td"]):
+      text = tag.get_text(" ", strip=True)
+      # ตรวจสอบว่ามีคำค้นหาครบทุกคำไหม (เช่น มีทั้ง "นิเคอิ" และ "เช้า")
+      if all(kw in text for kw in keywords):
+        # ต้องมีตัวเลขปนอยู่ด้วย เพราะคือผลรางวัล
+        if any(char.isdigit() for char in text):
+          if len(text) < 180:  # กรองข้อความที่ไม่ยาวเกินไป
+            candidates.append(text)
 
-    # กรองข้อความซ้ำ
-    unique_results = []
-    for r in results_found:
-      if r not in unique_results:
-        unique_results.append(r)
+    # กรองข้อความที่ไม่ซ้ำกัน
+    unique_candidates = []
+    for c in candidates:
+      if c not in unique_candidates:
+        unique_candidates.append(c)
 
-    if unique_results:
-      return "\n".join(unique_results[:3])
+    if unique_candidates:
+      return "\n".join(unique_candidates[:2])
 
     return None
   except Exception as e:
-    print(f"❌ Error fetching jaywaijing: {e}")
+    print(f"❌ Error fetching: {e}")
     return None
 
 
 @app.route("/", methods=["GET"])
 def home():
-  return "Line Bot Jaywaijing Parser is running!", 200
+  return "Line Bot Parser is running!", 200
 
 
 @app.route("/callback", methods=["POST"])
@@ -123,7 +128,7 @@ def handle_message(event):
     if not lottery_name:
       line_bot_api.reply_message(
           event.reply_token,
-          TextSendMessage(text="กรุณาระบุชื่อหวย เช่น 'ผลหวยนิเคอิบ่าย VIP'"),
+          TextSendMessage(text="กรุณาระบุชื่อหวย เช่น 'ผลหวยนิเคอิ เช้า'"),
       )
       return
 
