@@ -125,7 +125,7 @@ def start_scheduler():
     add_lottery_schedule("ลาวกาชาด", 22, 10)
     add_lottery_schedule("ดาวโจนส์+VIP", 23, 30)
     add_lottery_schedule("ประชาชนลาว", 3, 30)
-    add_lottery_schedule("ลาวสันติภาพ", 3, 45)
+    add_lottery_schedule("ลาวสันติภาพ", 3, 31)
 
     if not scheduler.running:
         scheduler.start()
