@@ -31,7 +31,79 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 bkk_tz = pytz.timezone("Asia/Bangkok")
 
 
-# --- 1. ฟังก์ชันสร้างข้อความแนวทางหวย ---
+def get_thai_date():
+  thai_months = [
+      "",
+      "มกราคม",
+      "กุมภาพันธ์",
+      "มีนาคม",
+      "เมษายน",
+      "พฤษภาคม",
+      "มิถุนายน",
+      "กรกฎาคม",
+      "สิงหาคม",
+      "กันยายน",
+      "ตุลาคม",
+      "พฤศจิกายน",
+      "ธันวาคม",
+  ]
+  now = datetime.now(bkk_tz) if "datetime" in globals() else None
+  # ใช้ datetime แบบปลอดภัย
+  from datetime import datetime
+
+  now = datetime.now(bkk_tz)
+  return f"{now.day} {thai_months[now.month]} {now.year + 543}"
+
+
+# --- 1. ฟังก์ชันดึงผลหวยจากเว็บไซต์ jaywaijing.co ---
+def fetch_jaywaijing_result(lottery_name):
+  try:
+    target_url = "https://jaywaijing.co/home"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
+    }
+    response = requests.get(target_url, headers=headers, timeout=10)
+    if response.status_code != 200:
+      return None
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    clean_name = (
+        lottery_name.replace("VIP", "")
+        .replace("(", " ")
+        .replace(")", " ")
+        .strip()
+    )
+    keywords = [kw for kw in clean_name.split() if kw]
+
+    if not keywords:
+      keywords = [lottery_name]
+
+    candidates = []
+    for tag in soup.find_all(["div", "tr", "li", "p", "span", "td"]):
+      text = tag.get_text(" ", strip=True)
+      if all(kw in text for kw in keywords):
+        if any(char.isdigit() for char in text):
+          if len(text) < 180:
+            candidates.append(text)
+
+    unique_candidates = []
+    for c in candidates:
+      if c not in unique_candidates:
+        unique_candidates.append(c)
+
+    if unique_candidates:
+      return "\n".join(unique_candidates[:2])
+
+    return None
+  except Exception as e:
+    print(f"❌ Error fetching: {e}")
+    return None
+
+
+# --- 2. ฟังก์ชันสร้างข้อความแนวทางหวย ---
 def generate_lottery_message(lottery_name="แนวทางหวย"):
   root_numbers = random.sample(range(0, 10), 2)
   spot_numbers = random.sample(range(0, 100), 10)
@@ -46,7 +118,7 @@ def generate_lottery_message(lottery_name="แนวทางหวย"):
   return message_text
 
 
-# --- 2. ฟังก์ชันส่งแนวทางหวยอัตโนมัติตามชื่อหวย ---
+# --- 3. ฟังก์ชันส่งแนวทางหวยอัตโนมัติตามชื่อหวย ---
 def send_lottery_guidance(lottery_name="แนวทางหวย"):
   message_text = generate_lottery_message(lottery_name)
   try:
@@ -63,27 +135,7 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
     print(f"❌ เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
-# --- 3. ฟังก์ชันดึงผลหวยแบบเรียลไทม์ ---
-def fetch_realtime_lottery(lottery_name):
-  try:
-    if "ฮานอย" in lottery_name:
-      return f"🟢 ผล {lottery_name} (เรียลไทม์)\nเลข 3 ตัว: 824\nเลข 2 ตัว: 16"
-    elif "ลาว" in lottery_name:
-      return (
-          f"🔵 ผล {lottery_name}"
-          " (เรียลไทม์)\nเลข 4 ตัว: 9182\nเลข 3 ตัว: 182\nเลข 2 ตัว: 82"
-      )
-    else:
-      return (
-          f"⚠️ ยังไม่มีระบบดึงผลเรียลไทม์สำหรับ:"
-          f" {lottery_name}\n(ระบบกำลังพัฒนา)"
-      )
-  except Exception as e:
-    print(f"Error fetching lottery: {e}")
-    return "❌ ขออภัย ไม่สามารถดึงผลหวยได้ในขณะนี้"
-
-
-# --- 4. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (พร้อมระบบป้องกันเบิ้ล) ---
+# --- 4. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (พร้อมตารางเวลาครบถ้วนของคุณ) ---
 scheduler = BackgroundScheduler(timezone=bkk_tz)
 
 
@@ -111,7 +163,7 @@ def start_scheduler():
         replace_existing=True,
     )
 
-  # ใส่ตารางเวลาที่คุณต้องการทั้งหมดครบถ้วน
+  # ตารางเวลาของคุณครบทุกรายการตามเดิมเป๊ะๆ
   add_lottery_schedule("ลาวExtar", 8, 0)
   add_lottery_schedule("นิเคอิเช้า+VIP", 8, 30)
   add_lottery_schedule("ฮานอยอาเซียน", 8, 30)
@@ -209,7 +261,7 @@ def handle_message(event):
       )
     return
 
-  # 2. ตรวจผลหวยเรียลไทม์
+  # 2. ตรวจผลหวยจากเว็บไซต์ jaywaijing.co (เพิ่มกลับมาให้สมบูรณ์)
   if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
     lottery_name = user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
 
@@ -217,15 +269,29 @@ def handle_message(event):
       line_bot_api.reply_message(
           event.reply_token,
           TextSendMessage(
-              text=(
-                  "กรุณาระบุชื่อหวยที่ต้องการตรวจด้วยครับ\nเช่น"
-                  " 'ผลหวยฮานอย' หรือ 'ผลหวยลาว'"
-              )
+              text="กรุณาระบุชื่อหวยที่ต้องการตรวจด้วยครับ\nเช่น 'ผลหวยนิเคอิ เช้า'"
           ),
       )
       return
 
-    result_text = fetch_realtime_lottery(lottery_name)
+    web_result = fetch_jaywaijing_result(lottery_name)
+
+    if web_result:
+      result_text = (
+          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+          f"📅 ประจำวันที่: {get_thai_date()}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"{web_result}\n"
+          f"━━━━━━━━━━━━━━━"
+      )
+    else:
+      result_text = (
+          f"🟢 ผลรางวัล {lottery_name} (ใบดำนำโชค)\n"
+          f"📅 ประจำวันที่: {get_thai_date()}\n"
+          f"━━━━━━━━━━━━━━━\n"
+          f"❌ ยังไม่พบผลรางวัลของ '{lottery_name}' จากเว็บไซต์ในขณะนี้"
+      )
+
     line_bot_api.reply_message(
         event.reply_token, TextSendMessage(text=result_text)
     )
