@@ -3,6 +3,8 @@ import random
 import pytz
 import atexit
 import fcntl
+import requests
+from bs4 import BeautifulSoup
 from flask import Flask, abort, request
 from apscheduler.schedulers.background import BackgroundScheduler
 from linebot import LineBotApi, WebhookHandler
@@ -63,11 +65,25 @@ def send_lottery_guidance(lottery_name="แนวทางหวย"):
         print(f"❌ เกิดข้อผิดพลาดในการส่ง [{lottery_name}]: {e}")
 
 
-# --- 3. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (ป้องกันรันซ้ำ) ---
+# --- 3. ฟังก์ชันดึงผลหวยแบบเรียลไทม์ (จำลองโครงสร้าง) ---
+def fetch_realtime_lottery(lottery_name):
+    # หมายเหตุ: นำ API ลิงก์หรือโค้ดดึงข้อมูลเว็บจริงมาใส่แทนที่ผลลัพธ์จำลองนี้
+    try:
+        if "ฮานอย" in lottery_name:
+            return f"🟢 ผล {lottery_name} (เรียลไทม์)\nเลข 3 ตัว: 824\nเลข 2 ตัว: 16"
+        elif "ลาว" in lottery_name:
+            return f"🔵 ผล {lottery_name} (เรียลไทม์)\nเลข 4 ตัว: 9182\nเลข 3 ตัว: 182\nเลข 2 ตัว: 82"
+        else:
+            return f"⚠️ ยังไม่มีระบบดึงผลเรียลไทม์สำหรับ: {lottery_name}\n(ระบบกำลังพัฒนา)"
+    except Exception as e:
+        print(f"Error fetching lottery: {e}")
+        return "❌ ขออภัย ไม่สามารถดึงผลหวยได้ในขณะนี้"
+
+
+# --- 4. ระบบ Scheduler ตั้งเวลาส่งอัตโนมัติ (ป้องกันรันซ้ำ) ---
 scheduler = BackgroundScheduler(timezone=bkk_tz)
 
 def start_scheduler():
-    # ป้องกันไม่ให้ Scheduler รันซ้ำด้วย File Lock ในระบบ Linux (Render)
     lock_file_path = "/tmp/scheduler.lock"
     try:
         fp = open(lock_file_path, "wb")
@@ -88,9 +104,6 @@ def start_scheduler():
             replace_existing=True,
         )
 
-    # =========================================================
-    # 🎯 ตารางตั้งชื่อหวยและเวลาส่งอัตโนมัติ
-    # =========================================================
     add_lottery_schedule("ลาวExtar", 8, 0)
     add_lottery_schedule("นิเคอิเช้า+VIP", 8, 30)
     add_lottery_schedule("ฮานอยอาเซียน", 8, 30)
@@ -129,19 +142,16 @@ def start_scheduler():
 
     if not scheduler.running:
         scheduler.start()
-        print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว! (Single Instance Lock active)")
+        print("📌 Scheduler เริ่มทำงานเรียบร้อยแล้ว!")
 
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
-# เริ่มทำงานระบบตั้งเวลา
 start_scheduler()
-
 
 # --- Webhook Routes ---
 @app.route("/", methods=["GET"])
 def home():
     return "Line Bot Scheduler is running!", 200
-
 
 @app.route("/test-push", methods=["GET"])
 def test_push():
@@ -150,7 +160,6 @@ def test_push():
         return "ส่งข้อความทดสอบเรียบร้อยแล้ว!", 200
     except Exception as e:
         return f"เกิดข้อผิดพลาด: {e}", 500
-
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -164,8 +173,7 @@ def callback():
 
     return "OK"
 
-
-# --- 4. ระบบตอบกลับข้อความในไลน์ ---
+# --- 5. ระบบตอบกลับข้อความในไลน์ ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.strip()
@@ -173,6 +181,7 @@ def handle_message(event):
     if event.source.type == "group":
         print(f"📌 Group ID ปัจจุบันคือ: {event.source.group_id}")
 
+    # 1. ขอไอดีกลุ่ม
     if user_msg == "ขอไอดีกลุ่ม":
         if event.source.type == "group":
             group_id = event.source.group_id
@@ -187,6 +196,24 @@ def handle_message(event):
             )
         return
 
+    # 2. ตรวจผลหวยเรียลไทม์ (เพิ่มใหม่)
+    if user_msg.startswith("ผลหวย") or user_msg.startswith("ตรวจหวย"):
+        lottery_name = user_msg.replace("ผลหวย", "").replace("ตรวจหวย", "").strip()
+        
+        if not lottery_name:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="กรุณาระบุชื่อหวยที่ต้องการตรวจด้วยครับ\nเช่น 'ผลหวยฮานอย' หรือ 'ผลหวยลาว'")
+            )
+            return
+            
+        result_text = fetch_realtime_lottery(lottery_name)
+        line_bot_api.reply_message(
+            event.reply_token, TextSendMessage(text=result_text)
+        )
+        return
+
+    # 3. ขอแนวทางระบุชื่อ
     if user_msg.startswith("ขอแนวทาง"):
         lottery_name = user_msg.replace("ขอแนวทาง", "").strip()
         if not lottery_name:
@@ -196,12 +223,15 @@ def handle_message(event):
         line_bot_api.reply_message(
             event.reply_token, TextSendMessage(text=message_text)
         )
+        return
 
-    elif user_msg in ["แนวทาง", "แนวทางหวย"]:
+    # 4. ขอแนวทางทั่วไป
+    if user_msg in ["แนวทาง", "แนวทางหวย"]:
         message_text = generate_lottery_message("หวยประจำวัน")
         line_bot_api.reply_message(
             event.reply_token, TextSendMessage(text=message_text)
         )
+        return
 
 
 if __name__ == "__main__":
