@@ -185,7 +185,7 @@ def start_scheduler():
   add_lottery_schedule("ไทยเย็น", 16, 0)
   add_lottery_schedule("ฮานอยพิเศษ", 16, 30)
   add_lottery_schedule("ฮานอยสามัคคี", 16, 30)
-  add_lottery_schedule("ฮานอยปกติ", 17, 30)
+  add_lottery_schedule("ฮานอยปกติ", 17, 5)
   add_lottery_schedule("ฮานอยVIP", 18, 30)
   add_lottery_schedule("ฮานอยพัฒนา", 18, 30)
   add_lottery_schedule("ลาวสามัคคี", 19, 30)
