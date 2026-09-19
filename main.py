@@ -100,7 +100,7 @@ def start_scheduler():
     add_lottery_schedule("ฮานอยHD", 10, 30)
     add_lottery_schedule("ใต้หวัน+VIP", 11, 0)
     add_lottery_schedule("ฮานอยStar", 11, 30)
-    add_lottery_schedule("เกาหลี+VIP", 12, 0)
+    add_lottery_schedule("เกาหลี+VIP", 11, 47)
     add_lottery_schedule("นิเคอิบ่าย+VIP", 12, 43)
     add_lottery_schedule("ลาวHD", 13, 0)
     add_lottery_schedule("จีนบ่าย+VIP", 13, 10)
